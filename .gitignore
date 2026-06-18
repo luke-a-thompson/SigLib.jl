@@ -8,6 +8,17 @@ build/
 *.cov
 *.mem
 *.jl.cov
+*.jl.*.cov
 Manifest-v*.toml
 
 docs/build/
+docs/site/
+
+deps/deps.jl
+deps/build.log
+deps/downloads/
+deps/usr/
+deps/src/
+
+LocalPreferences.toml
+JuliaLocalPreferences.toml
