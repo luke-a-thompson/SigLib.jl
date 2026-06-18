@@ -1,0 +1,22 @@
+name = "SigLib"
+uuid = "1834686d-7328-474a-962d-7da3235ed9d5"
+version = "0.1.0"
+
+[deps]
+cpsig_jll = "cff34b66-0590-5807-8b7a-7cf5ada499db"
+
+[weakdeps]
+ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+
+[extensions]
+SigLibChainRulesCoreExt = "ChainRulesCore"
+
+[compat]
+ChainRulesCore = "1"
+julia = "1.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

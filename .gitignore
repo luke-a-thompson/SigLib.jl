@@ -1,0 +1,13 @@
+.agents/
+.codex/
+.git/
+
+build/
+
+*.ji
+*.cov
+*.mem
+*.jl.cov
+Manifest-v*.toml
+
+docs/build/

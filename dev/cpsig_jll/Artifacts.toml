@@ -1,0 +1,10 @@
+[[cpsig]]
+arch = "x86_64"
+git-tree-sha1 = "15636ce5b563db1fe73ed5c96d4092e6d4585e2f"
+lazy = true
+libc = "glibc"
+os = "linux"
+
+    [[cpsig.download]]
+    sha256 = "d007b49262daaa4d90016897ff86bd43366bece77fe5d87d8954a1e7e3ac4457"
+    url = "https://raw.githubusercontent.com/luke-a-thompson/SigLib.jl/main/products/cpsig.v3.1.0.x86_64-linux-gnu.tar.gz"
