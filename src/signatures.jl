@@ -1,20 +1,22 @@
-_storage_eltype(::Type{Float32}) = Float32
-_storage_eltype(::Type{Float64}) = Float64
+_storage_eltype(::Type{Float32}, ::Symbol) = Float32
+_storage_eltype(::Type{Float64}, ::Symbol) = Float64
 
-function _storage_eltype(::Type{T}) where {T<:Real}
-    throw(TypeError(:sig, "path eltype must be Float32 or Float64", Union{Float32,Float64}, T))
+function _storage_eltype(::Type{T}, function_name::Symbol) where {T<:Real}
+    throw(TypeError(function_name, "path eltype must be Float32 or Float64", Union{Float32,Float64}, T))
 end
 
-function _validate_standard_signature_options(correction)
+_storage_eltype(::Type{T}) where {T<:Real} = _storage_eltype(T, :sig)
+
+function _validate_standard_signature_options(correction, function_name::Symbol=:sig)
     correction === nothing ||
-        throw(ArgumentError("correction is not supported by SigLib.sig yet"))
+        throw(ArgumentError("correction is not supported by SigLib.$function_name yet"))
     return nothing
 end
 
-function _path_buffer(path::AbstractArray{T,N}) where {T<:Real,N}
+function _path_buffer(path::AbstractArray{T,N}, function_name::Symbol=:sig) where {T<:Real,N}
     N >= 2 || throw(ArgumentError("path must have at least rank 2"))
 
-    S = _storage_eltype(T)
+    S = _storage_eltype(T, function_name)
     A = path isa Array{S,N} ? path : Array{S,N}(path)
     path_size = size(A)
     len = path_size[end - 1]
@@ -71,6 +73,29 @@ function _format_path_output(out::Array{T,3}, batch_shape::Tuple) where {T}
     return reshape(batch_first, batch_shape..., len, dimension)
 end
 
+function _signature_like_buffer(
+    x::AbstractArray{T,N},
+    ::Type{S},
+    siglen::Integer,
+    name::AbstractString,
+) where {T<:Real,N,S<:Union{Float32,Float64}}
+    N >= 1 || throw(ArgumentError("$name must have at least rank 1"))
+
+    batch_shape = size(x)[1:end - 1]
+    expected_size = isempty(batch_shape) ? (siglen,) : (batch_shape..., siglen)
+    size(x) == expected_size ||
+        throw(ArgumentError("$name must have shape $expected_size, got $(size(x))"))
+
+    A = x isa Array{S,N} ? x : Array{S,N}(x)
+    batch_size = isempty(batch_shape) ? 1 : prod(batch_shape)
+    if isempty(batch_shape)
+        return reshape(A, siglen, batch_size), batch_shape, batch_size
+    end
+
+    batch_first = reshape(A, batch_size, siglen)
+    return permutedims(batch_first, (2, 1)), batch_shape, batch_size
+end
+
 """
     sig(path, degree; time_aug=false, lead_lag=false, end_time=1.0,
         horner=true, scalar_term=false, correction=nothing, n_jobs=1)
@@ -115,18 +140,7 @@ function sig(
     return _format_signature_output(out, batch_shape)
 end
 
-"""
-    sig_backprop(path, sig_value, sig_derivs, degree; time_aug=false,
-        lead_lag=false, end_time=1.0, scalar_term=false, correction=nothing,
-        n_jobs=1)
-
-Backpropagate a signature cotangent to the underlying path.
-
-`sig_value` must be the result of `sig(path, degree; same_options...)`, and
-`sig_derivs` must have the same shape. The returned array has the same shape
-and element type as `path`.
-"""
-function sig_backprop(
+function _sig_backprop(
     path::AbstractArray{T,N},
     sig_value::AbstractArray,
     sig_derivs::AbstractArray,
