@@ -7,6 +7,7 @@
     @test log_sig_length(1, typemax(UInt64)) == 1
     @test_throws OverflowError log_sig_length(1, big(typemax(UInt64)) + 1)
     @test_throws OverflowError prepare_log_sig(2, 65, 2)
+    @test_throws ArgumentError prepare_branched_log_sig(2, 2, 1)
     @test_throws ArgumentError sig_to_log_sig(fill(1.0), 1, 0)
     for method in (-1, 3, 4, 99)
         @test_throws ArgumentError logsig_to_sig(Float64[], 2, 0; method=method)

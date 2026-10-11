@@ -20,7 +20,7 @@ export sig, sig_length, signature, signature_length
 export clear_log_sig_cache, set_cache_dir, log_sig, log_sig_combine, log_sig_join
 export log_sig_length, logsig_to_sig, prepare_log_sig, sig_to_log_sig
 export branched_sig, branched_sig_combine, branched_sig_length, branched_sig_to_log_sig
-export branched_log_sig, prepare_branched_sig
+export branched_log_sig, branched_log_sig_length, prepare_branched_sig, prepare_branched_log_sig
 export branched_signature, branched_signature_length
 export SigLibError, CPSigError
 

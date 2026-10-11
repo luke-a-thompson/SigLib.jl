@@ -31,6 +31,25 @@ function sig_length(
 end
 
 """
+    branched_log_sig_length(dimension, degree; planar=false)
+
+Return the scalar-free branched-log length: decorated rooted trees for nonplanar signatures, or weighted Lyndon forests for compressed planar signatures.
+"""
+function branched_log_sig_length(dimension::Integer, degree::Integer; planar::Bool=false)
+    d = _as_uint64(dimension, "dimension")
+    n = _as_uint64(degree, "degree")
+    d <= 255 || throw(ArgumentError("branched log signature dimension must be <= 255"))
+    (d == 0 || n == 0) && return 0
+    if !_modern_abi[]
+        planar && throw(ArgumentError("compressed branched log signatures require a pySigLib 4.x native artifact"))
+        return branched_sig_length(d, n)
+    end
+    len = ccall(_cpsig_symbol(:branched_log_sig_length), UInt64, (UInt64, UInt64, Bool), d, n, planar)
+    0 < len <= typemax(Int) || throw(OverflowError("branched log signature length overflowed"))
+    return Int(len)
+end
+
+"""
     log_sig_length(dimension, degree; time_aug=false, lead_lag=false)
 
 Return the length of a truncated compressed log signature for `dimension`

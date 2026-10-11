@@ -455,9 +455,9 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         planar::Bool,
         scalar_term::Bool,
         n_jobs::Integer,
+        method::Integer,
     )
         status = if _modern_abi[]
-            check_status(ccall(_cpsig_symbol(:prepare_branched_log_sig), Cint, (UInt64, UInt64, Cint, Bool, Bool), dimension, max_nodes, 0, false, planar), :prepare_branched_log_sig)
             ccall(
                 _cpsig_symbol($symbol),
                 Cint,
@@ -469,7 +469,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
                 _as_uint64(batch_size, "batch_size"),
                 _as_uint64(dimension, "dimension"),
                 _as_uint64(max_nodes, "max_nodes"),
-                Cint(0), _as_cint_n_jobs(n_jobs), planar, scalar_term,
+                Cint(method), _as_cint_n_jobs(n_jobs), planar, scalar_term,
             )
         else
             ccall(
@@ -582,9 +582,9 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         planar::Bool,
         scalar_term::Bool,
         n_jobs::Integer,
+        method::Integer,
     )
         status = if _modern_abi[]
-            check_status(ccall(_cpsig_symbol(:prepare_branched_log_sig), Cint, (UInt64, UInt64, Cint, Bool, Bool), dimension, max_nodes, 0, false, planar), :prepare_branched_log_sig)
             ccall(
                 _cpsig_symbol($symbol),
                 Cint,
@@ -596,7 +596,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
                 _as_uint64(batch_size, "batch_size"),
                 _as_uint64(dimension, "dimension"),
                 _as_uint64(max_nodes, "max_nodes"),
-                Cint(0), _as_cint_n_jobs(n_jobs), planar, scalar_term,
+                Cint(method), _as_cint_n_jobs(n_jobs), planar, scalar_term,
             )
         else
             ccall(
@@ -648,5 +648,26 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         )
         check_status(status, $symbol)
         return out1, out2
+    end
+end
+
+for (T, suffix) in ((Float32, :f), (Float64, :d))
+    forward = QuoteNode(Symbol(:branched_log_sig_from_path_, suffix))
+    backward = QuoteNode(Symbol(:branched_log_sig_from_path_backprop_, suffix))
+    @eval function _branched_log_sig_from_path_c!(out::Matrix{$T}, path::Array{$T,3}, batch_size, len, dimension, degree, n_jobs)
+        status = ccall(_cpsig_symbol($forward), Cint,
+            (Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, UInt64, Cint),
+            path, out, _as_uint64(batch_size, "batch_size"), _as_uint64(len, "length"),
+            _as_uint64(dimension, "dimension"), _as_uint64(degree, "degree"), _as_cint_n_jobs(n_jobs))
+        check_status(status, $forward)
+        return out
+    end
+    @eval function _branched_log_sig_from_path_backprop_c!(out::Array{$T,3}, derivs::Matrix{$T}, path::Array{$T,3}, batch_size, len, dimension, degree, n_jobs)
+        status = ccall(_cpsig_symbol($backward), Cint,
+            (Ptr{$T}, Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, UInt64, Cint),
+            derivs, out, path, _as_uint64(batch_size, "batch_size"), _as_uint64(len, "length"),
+            _as_uint64(dimension, "dimension"), _as_uint64(degree, "degree"), _as_cint_n_jobs(n_jobs))
+        check_status(status, $backward)
+        return out
     end
 end

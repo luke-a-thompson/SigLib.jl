@@ -48,6 +48,29 @@ function prepare_log_sig(
 end
 
 """
+    prepare_branched_log_sig(dimension, degree, method; time_aug=false, lead_lag=false, planar=false, use_disk=false)
+
+Prepare branched-log-signature caches. Methods 1–3 require `planar=true` and a 4.x native artifact. High-level functions prepare automatically.
+"""
+function prepare_branched_log_sig(
+    dimension::Integer, degree::Integer, method::Integer;
+    time_aug::Bool=false, lead_lag::Bool=false, planar::Bool=false, use_disk::Bool=false,
+)
+    m = _branched_log_sig_method(method, planar)
+    d = _branched_log_sig_dimension(dimension, time_aug, lead_lag)
+    n = _as_uint64(degree, "degree")
+    d != 0 && branched_sig_length(d, n; planar=planar)
+    lock(_cache_lock) do
+        if _modern_abi[]
+            check_status(ccall(_cpsig_symbol(:prepare_branched_log_sig), Cint, (UInt64, UInt64, Cint, Bool, Bool), d, n, m, use_disk, planar), :prepare_branched_log_sig)
+        else
+            d != 0 && prepare_branched_sig(d, n; planar=planar, use_disk=use_disk)
+        end
+    end
+    return nothing
+end
+
+"""
     clear_log_sig_cache(; use_disk=false)
 
 Clear native caches, waiting for active cache-dependent computations. With `use_disk=true`, also remove native disk cache files under the configured cache directory.

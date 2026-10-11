@@ -299,19 +299,19 @@ function rrule(
     ::typeof(SigLib.branched_sig_to_log_sig),
     bsig::AbstractArray{T,N},
     dimension::Integer,
-    max_nodes::Integer;
+    degree::Integer;
     time_aug::Bool=false,
     lead_lag::Bool=false,
     planar::Bool=false,
-    scalar_term::Bool=false,
+    method::Union{Nothing,Integer}=nothing,
     n_jobs::Integer=1,
 ) where {T<:Union{Float32,Float64},N}
     y = SigLib.branched_sig_to_log_sig(
-        bsig, dimension, max_nodes;
+        bsig, dimension, degree;
         time_aug=time_aug,
         lead_lag=lead_lag,
         planar=planar,
-        scalar_term=scalar_term,
+        method=method,
         n_jobs=n_jobs,
     )
     project_bsig = ProjectTo(bsig)
@@ -323,11 +323,11 @@ function rrule(
         end
 
         bsigbar = SigLib._branched_sig_to_log_sig_backprop(
-            bsig, ybar, dimension, max_nodes;
+            bsig, ybar, dimension, degree;
             time_aug=time_aug,
             lead_lag=lead_lag,
             planar=planar,
-            scalar_term=scalar_term,
+            method=method,
             n_jobs=n_jobs,
         )
         return NoTangent(), project_bsig(bsigbar), NoTangent(), NoTangent()
@@ -339,17 +339,34 @@ end
 function rrule(
     ::typeof(SigLib.branched_log_sig),
     path::AbstractArray{T,N},
-    max_nodes::Integer;
+    degree::Integer;
     time_aug::Bool=false,
     lead_lag::Bool=false,
     end_time::Real=1.0,
     planar::Bool=false,
     scalar_term::Bool=false,
+    method::Union{Nothing,Integer}=nothing,
     correction=nothing,
     n_jobs::Integer=1,
 ) where {T<:Union{Float32,Float64},N}
-    bsig = SigLib.branched_sig(
-        path, max_nodes;
+    m = SigLib._branched_log_sig_method(method, planar)
+    correction isa AbstractArray && isempty(correction) && (correction = nothing)
+    if m == 3
+        y = SigLib.branched_log_sig(path, degree;
+            time_aug=time_aug, lead_lag=lead_lag, end_time=end_time, planar=planar,
+            scalar_term=scalar_term, method=m, correction=correction, n_jobs=n_jobs)
+        project_path = ProjectTo(path)
+        function direct_pullback(ybar)
+            ybar = unthunk(ybar)
+            _is_zero_tangent(ybar) && return NoTangent(), ZeroTangent(), NoTangent()
+            pathbar = SigLib._branched_log_sig_from_path_backprop(path, ybar, degree;
+                time_aug=time_aug, lead_lag=lead_lag, end_time=end_time, n_jobs=n_jobs)
+            return NoTangent(), project_path(pathbar), NoTangent()
+        end
+        return y, direct_pullback
+    end
+    bsig, sig_pullback = rrule(SigLib.branched_sig,
+        path, degree;
         time_aug=time_aug,
         lead_lag=lead_lag,
         end_time=end_time,
@@ -359,44 +376,15 @@ function rrule(
         n_jobs=n_jobs,
     )
     dimension = size(path, N)
-    y = SigLib.branched_sig_to_log_sig(
-        bsig, dimension, max_nodes;
+    y, convert_pullback = rrule(SigLib.branched_sig_to_log_sig,
+        bsig, dimension, degree;
         time_aug=time_aug,
         lead_lag=lead_lag,
         planar=planar,
-        scalar_term=scalar_term,
+        method=m,
         n_jobs=n_jobs,
     )
-    project_path = ProjectTo(path)
-
-    function branched_log_sig_pullback(ybar)
-        ybar = unthunk(ybar)
-        if _is_zero_tangent(ybar)
-            return NoTangent(), ZeroTangent(), NoTangent()
-        end
-
-        bsigbar = SigLib._branched_sig_to_log_sig_backprop(
-            bsig, ybar, dimension, max_nodes;
-            time_aug=time_aug,
-            lead_lag=lead_lag,
-            planar=planar,
-            scalar_term=scalar_term,
-            n_jobs=n_jobs,
-        )
-        pathbar = SigLib._branched_sig_backprop(
-            path, bsig, bsigbar, max_nodes;
-            time_aug=time_aug,
-            lead_lag=lead_lag,
-            end_time=end_time,
-            planar=planar,
-            scalar_term=scalar_term,
-            correction=correction,
-            n_jobs=n_jobs,
-        )
-        return NoTangent(), project_path(pathbar), NoTangent()
-    end
-
-    return y, branched_log_sig_pullback
+    return y, ybar -> sig_pullback(convert_pullback(ybar)[2])
 end
 
 function rrule(
