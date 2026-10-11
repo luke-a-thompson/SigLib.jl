@@ -186,6 +186,19 @@ function rrule(
     scalar_term::Bool=false,
     n_jobs::Integer=1,
 ) where {T<:Union{Float32,Float64},N}
+    SigLib._as_log_sig_method(method)
+    if method != 3
+        sig_value, sig_pullback = rrule(
+            SigLib.sig, path, degree;
+            time_aug=time_aug, lead_lag=lead_lag, end_time=end_time,
+            scalar_term=method == 0 && scalar_term, n_jobs=n_jobs,
+        )
+        y, convert_pullback = rrule(
+            SigLib.sig_to_log_sig, sig_value, size(path, N), degree;
+            time_aug=time_aug, lead_lag=lead_lag, method=method, n_jobs=n_jobs,
+        )
+        return y, ybar -> sig_pullback(convert_pullback(ybar)[2])
+    end
     y = SigLib.log_sig(
         path, degree;
         time_aug=time_aug,
@@ -203,13 +216,11 @@ function rrule(
             return NoTangent(), ZeroTangent(), NoTangent()
         end
 
-        pathbar = SigLib._log_sig_backprop(
-            path, y, ybar, degree;
+        pathbar = SigLib._log_sig_from_path_backprop(
+            path, ybar, degree;
             time_aug=time_aug,
             lead_lag=lead_lag,
             end_time=end_time,
-            method=method,
-            scalar_term=scalar_term,
             n_jobs=n_jobs,
         )
         return NoTangent(), project_path(pathbar), NoTangent()

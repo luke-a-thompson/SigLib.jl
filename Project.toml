@@ -3,7 +3,8 @@ uuid = "1834686d-7328-474a-962d-7da3235ed9d5"
 version = "0.1.0"
 
 [deps]
-cpsig_jll = "cff34b66-0590-5807-8b7a-7cf5ada499db"
+LazyArtifacts = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 
 [weakdeps]
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"

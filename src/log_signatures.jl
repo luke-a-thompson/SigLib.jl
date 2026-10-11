@@ -44,7 +44,8 @@ function _signature_input_buffer(
         dimension, degree;
         time_aug=time_aug, lead_lag=lead_lag, scalar_term=true,
     )
-    lastdim = size(x)[end]
+    N >= 1 || throw(ArgumentError("$name must have at least rank 1"))
+    lastdim = size(x, N)
     if lastdim == siglen
         buf, batch_shape, batch_size = _signature_like_buffer(x, S, siglen, name)
         return buf, batch_shape, batch_size, false
@@ -69,6 +70,7 @@ function _log_sig_buffer(
     lead_lag::Bool=false,
     scalar_term::Bool=false,
 ) where {T<:Real,N,S<:Union{Float32,Float64}}
+    _as_cached_log_sig_method(method)
     if method == 0
         return _signature_input_buffer(
             x, S, dimension, degree, name;
@@ -105,37 +107,6 @@ function _transformed_path_for_log_sig(
     return out, transformed_dimension, transformed_len
 end
 
-function _format_displacement_output(out::Matrix{T}, batch_shape::Tuple) where {T}
-    dimension, _ = size(out)
-    batch_first = permutedims(out, (2, 1))
-    if isempty(batch_shape)
-        return reshape(batch_first, dimension)
-    end
-
-    return reshape(batch_first, batch_shape..., dimension)
-end
-
-function _displacement_buffer(
-    displacement::AbstractArray{T,N},
-    ::Type{S},
-    dimension::Integer,
-    batch_shape::Tuple,
-    batch_size::Integer,
-    name::AbstractString,
-) where {T<:Real,N,S<:Union{Float32,Float64}}
-    expected_size = isempty(batch_shape) ? (dimension,) : (batch_shape..., dimension)
-    size(displacement) == expected_size ||
-        throw(ArgumentError("$name must have shape $expected_size, got $(size(displacement))"))
-
-    A = displacement isa Array{S,N} ? displacement : Array{S,N}(displacement)
-    if isempty(batch_shape)
-        return reshape(A, dimension, batch_size)
-    end
-
-    batch_first = reshape(A, batch_size, dimension)
-    return permutedims(batch_first, (2, 1))
-end
-
 """
     sig_to_log_sig(sig, dimension, degree; time_aug=false, lead_lag=false,
         method=1, n_jobs=1)
@@ -152,7 +123,7 @@ function sig_to_log_sig(
     n_jobs::Integer=1,
 ) where {T<:Real,N}
     degree >= 0 || throw(ArgumentError("degree must be nonnegative"))
-    method == 3 && throw(ArgumentError("method=3 is only supported by log_sig"))
+    _as_cached_log_sig_method(method)
     _as_cint_n_jobs(n_jobs)
     S = _storage_eltype(T, :sig_to_log_sig)
     sig_c, batch_shape, batch_size, scalar_term = _signature_input_buffer(
@@ -166,14 +137,16 @@ function sig_to_log_sig(
     out = Matrix{S}(undef, outlen, batch_size)
 
     if batch_size != 0 && outlen != 0
-        _prepare_log_sig_if_needed(
-            dimension, degree, method;
-            time_aug=time_aug, lead_lag=lead_lag,
-        )
-        _sig_to_log_sig_c!(
-            out, sig_c, batch_size, dimension, degree,
-            time_aug, lead_lag, method, scalar_term, n_jobs,
-        )
+        lock(_cache_lock) do
+            _prepare_log_sig_if_needed(
+                dimension, degree, method;
+                time_aug=time_aug, lead_lag=lead_lag,
+            )
+            _sig_to_log_sig_c!(
+                out, sig_c, batch_size, dimension, degree,
+                time_aug, lead_lag, method, scalar_term, n_jobs,
+            )
+        end
     end
 
     return _format_signature_output(out, batch_shape)
@@ -196,7 +169,7 @@ function logsig_to_sig(
     n_jobs::Integer=1,
 ) where {T<:Real,N}
     degree >= 0 || throw(ArgumentError("degree must be nonnegative"))
-    method == 3 && throw(ArgumentError("method=3 is not supported by logsig_to_sig"))
+    _as_cached_log_sig_method(method)
     _as_cint_n_jobs(n_jobs)
     S = _storage_eltype(T, :logsig_to_sig)
     log_sig_c, batch_shape, batch_size, inferred_scalar_term = _log_sig_buffer(
@@ -211,14 +184,16 @@ function logsig_to_sig(
     out = Matrix{S}(undef, outlen, batch_size)
 
     if batch_size != 0 && outlen != 0
-        _prepare_log_sig_if_needed(
-            dimension, degree, method;
-            time_aug=time_aug, lead_lag=lead_lag,
-        )
-        _logsig_to_sig_c!(
-            out, log_sig_c, batch_size, dimension, degree,
-            time_aug, lead_lag, method, output_scalar_term, n_jobs,
-        )
+        lock(_cache_lock) do
+            _prepare_log_sig_if_needed(
+                dimension, degree, method;
+                time_aug=time_aug, lead_lag=lead_lag,
+            )
+            _logsig_to_sig_c!(
+                out, log_sig_c, batch_size, dimension, degree,
+                time_aug, lead_lag, method, output_scalar_term, n_jobs,
+            )
+        end
     end
 
     return _format_signature_output(out, batch_shape)
@@ -249,33 +224,36 @@ function log_sig(
         outlen = log_sig_length(dimension, degree; time_aug=time_aug, lead_lag=lead_lag)
         out = Matrix{eltype(path_c)}(undef, outlen, batch_size)
         if batch_size != 0 && outlen != 0
-            transformed_path, transformed_dimension, transformed_len = _transformed_path_for_log_sig(
-                path_c, batch_size, dimension, len, time_aug, lead_lag, end_time, n_jobs,
-            )
-            _log_sig_from_path_c!(
-                out, transformed_path, batch_size, transformed_len,
-                transformed_dimension, degree, n_jobs,
-            )
+            lock(_cache_lock) do
+                transformed_path, transformed_dimension, transformed_len = _transformed_path_for_log_sig(
+                    path_c, batch_size, dimension, len, time_aug, lead_lag, end_time, n_jobs,
+                )
+                prepare_log_sig(transformed_dimension, degree, 3)
+                _log_sig_from_path_c!(
+                    out, transformed_path, batch_size, transformed_len,
+                    transformed_dimension, degree, n_jobs,
+                )
+            end
         end
         return _format_signature_output(out, batch_shape)
     end
 
     sig_scalar_term = method == 0 ? scalar_term : false
-    sig_value = sig(
-        path, degree;
-        time_aug=time_aug,
-        lead_lag=lead_lag,
-        end_time=end_time,
-        scalar_term=sig_scalar_term,
-        n_jobs=n_jobs,
+    path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :log_sig)
+    sig_c = _sig_from_buffer(
+        path_c, batch_size, dimension, len, degree;
+        time_aug=time_aug, lead_lag=lead_lag, end_time=end_time,
+        scalar_term=sig_scalar_term, n_jobs=n_jobs,
     )
-    return sig_to_log_sig(
-        sig_value, size(path, N), degree;
-        time_aug=time_aug,
-        lead_lag=lead_lag,
-        method=method,
-        n_jobs=n_jobs,
-    )
+    outlen = _log_sig_output_length(dimension, degree, method, sig_scalar_term; time_aug=time_aug, lead_lag=lead_lag)
+    out = Matrix{eltype(path_c)}(undef, outlen, batch_size)
+    if batch_size != 0 && outlen != 0
+        lock(_cache_lock) do
+            _prepare_log_sig_if_needed(dimension, degree, method; time_aug=time_aug, lead_lag=lead_lag)
+            _sig_to_log_sig_c!(out, sig_c, batch_size, dimension, degree, time_aug, lead_lag, method, sig_scalar_term, n_jobs)
+        end
+    end
+    return _format_signature_output(out, batch_shape)
 end
 
 function _sig_to_log_sig_backprop(
@@ -289,7 +267,7 @@ function _sig_to_log_sig_backprop(
     n_jobs::Integer=1,
 ) where {T<:Real,N}
     degree >= 0 || throw(ArgumentError("degree must be nonnegative"))
-    method == 3 && throw(ArgumentError("method=3 is only supported by log_sig"))
+    _as_cached_log_sig_method(method)
     _as_cint_n_jobs(n_jobs)
     S = _storage_eltype(T, :_sig_to_log_sig_backprop)
     sig_c, batch_shape, batch_size, scalar_term = _signature_input_buffer(
@@ -307,14 +285,16 @@ function _sig_to_log_sig_backprop(
     out = Matrix{S}(undef, outlen, batch_size)
 
     if batch_size != 0 && outlen != 0
-        _prepare_log_sig_if_needed(
-            dimension, degree, method;
-            time_aug=time_aug, lead_lag=lead_lag,
-        )
-        _sig_to_log_sig_backprop_c!(
-            out, sig_c, log_sig_derivs_c, batch_size, dimension, degree,
-            time_aug, lead_lag, method, scalar_term, n_jobs,
-        )
+        lock(_cache_lock) do
+            _prepare_log_sig_if_needed(
+                dimension, degree, method;
+                time_aug=time_aug, lead_lag=lead_lag,
+            )
+            _sig_to_log_sig_backprop_c!(
+                out, sig_c, log_sig_derivs_c, batch_size, dimension, degree,
+                time_aug, lead_lag, method, scalar_term, n_jobs,
+            )
+        end
     end
 
     return _format_signature_output(out, batch_shape)
@@ -332,7 +312,7 @@ function _logsig_to_sig_backprop(
     n_jobs::Integer=1,
 ) where {T<:Real,N}
     degree >= 0 || throw(ArgumentError("degree must be nonnegative"))
-    method == 3 && throw(ArgumentError("method=3 is not supported by logsig_to_sig"))
+    _as_cached_log_sig_method(method)
     _as_cint_n_jobs(n_jobs)
     S = _storage_eltype(T, :_logsig_to_sig_backprop)
     log_sig_c, batch_shape, batch_size, inferred_scalar_term = _log_sig_buffer(
@@ -348,49 +328,47 @@ function _logsig_to_sig_backprop(
     out = Matrix{S}(undef, size(log_sig_c, 1), batch_size)
 
     if batch_size != 0 && size(out, 1) != 0
-        _prepare_log_sig_if_needed(
-            dimension, degree, method;
-            time_aug=time_aug, lead_lag=lead_lag,
-        )
-        _logsig_to_sig_backprop_c!(
-            out, log_sig_c, sig_derivs_c, batch_size, dimension, degree,
-            time_aug, lead_lag, method, output_scalar_term, n_jobs,
-        )
+        lock(_cache_lock) do
+            _prepare_log_sig_if_needed(
+                dimension, degree, method;
+                time_aug=time_aug, lead_lag=lead_lag,
+            )
+            _logsig_to_sig_backprop_c!(
+                out, log_sig_c, sig_derivs_c, batch_size, dimension, degree,
+                time_aug, lead_lag, method, output_scalar_term, n_jobs,
+            )
+        end
     end
 
     return _format_signature_output(out, batch_shape)
 end
 
-function _log_sig_backprop(
+function _log_sig_from_path_backprop(
     path::AbstractArray{T,N},
-    log_sig_value::AbstractArray,
     log_sig_derivs::AbstractArray,
     degree::Integer;
     time_aug::Bool=false,
     lead_lag::Bool=false,
     end_time::Real=1.0,
-    method::Integer=1,
-    scalar_term::Bool=false,
     n_jobs::Integer=1,
 ) where {T<:Real,N}
     degree >= 0 || throw(ArgumentError("degree must be nonnegative"))
-    _as_log_sig_method(method)
     _as_cint_n_jobs(n_jobs)
 
-    if method == 3
-        path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :log_sig)
-        S = eltype(path_c)
-        siglen = log_sig_length(dimension, degree; time_aug=time_aug, lead_lag=lead_lag)
-        _signature_buffer(log_sig_value, S, siglen, batch_shape, batch_size, "log_sig_value")
-        log_sig_derivs_c = _signature_buffer(
-            log_sig_derivs, S, siglen, batch_shape, batch_size, "log_sig_derivs",
-        )
-        out_c = zeros(S, dimension, len, batch_size)
-        if batch_size != 0 && siglen != 0
+    path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :log_sig)
+    S = eltype(path_c)
+    siglen = log_sig_length(dimension, degree; time_aug=time_aug, lead_lag=lead_lag)
+    log_sig_derivs_c = _signature_buffer(
+        log_sig_derivs, S, siglen, batch_shape, batch_size, "log_sig_derivs",
+    )
+    out_c = zeros(S, dimension, len, batch_size)
+    if batch_size != 0 && siglen != 0
+        lock(_cache_lock) do
             transformed_path, transformed_dimension, transformed_len = _transformed_path_for_log_sig(
                 path_c, batch_size, dimension, len, time_aug, lead_lag, end_time, n_jobs,
             )
-            transformed_out = zeros(S, transformed_dimension, transformed_len, batch_size)
+            prepare_log_sig(transformed_dimension, degree, 3)
+            transformed_out = (time_aug || lead_lag) ? zeros(S, transformed_dimension, transformed_len, batch_size) : out_c
             _log_sig_from_path_backprop_c!(
                 transformed_out, log_sig_derivs_c, transformed_path, batch_size,
                 transformed_len, transformed_dimension, degree, n_jobs,
@@ -400,43 +378,10 @@ function _log_sig_backprop(
                     out_c, transformed_out, batch_size, dimension, len,
                     time_aug, lead_lag, end_time, n_jobs,
                 )
-            else
-                out_c .= transformed_out
             end
         end
-        return _format_path_output(out_c, batch_shape)
     end
-
-    sig_scalar_term = method == 0 ? scalar_term : false
-    sig_value = sig(
-        path, degree;
-        time_aug=time_aug,
-        lead_lag=lead_lag,
-        end_time=end_time,
-        scalar_term=sig_scalar_term,
-        n_jobs=n_jobs,
-    )
-    sig_derivs = _sig_to_log_sig_backprop(
-        sig_value, log_sig_derivs, size(path, N), degree;
-        time_aug=time_aug,
-        lead_lag=lead_lag,
-        method=method,
-        n_jobs=n_jobs,
-    )
-    # Validate the provided primal while keeping the path pullback based on the
-    # recomputed signature, which is what the composed implementation needs.
-    _signature_like_buffer(
-        log_sig_value, eltype(path), size(log_sig_derivs, ndims(log_sig_derivs)),
-        "log_sig_value",
-    )
-    return _sig_backprop(
-        path, sig_value, sig_derivs, degree;
-        time_aug=time_aug,
-        lead_lag=lead_lag,
-        end_time=end_time,
-        scalar_term=sig_scalar_term,
-        n_jobs=n_jobs,
-    )
+    return _format_path_output(out_c, batch_shape)
 end
 
 """
@@ -460,10 +405,12 @@ function log_sig_combine(
     out = Matrix{S}(undef, len, batch_size)
 
     if batch_size != 0 && len != 0
-        prepare_log_sig(dimension, degree, 2)
-        _log_sig_combine_c!(
-            out, log_sig1_c, log_sig2_c, batch_size, dimension, degree, n_jobs,
-        )
+        lock(_cache_lock) do
+            prepare_log_sig(dimension, degree, _modern_abi[] ? 3 : 2)
+            _log_sig_combine_c!(
+                out, log_sig1_c, log_sig2_c, batch_size, dimension, degree, n_jobs,
+            )
+        end
     end
 
     return _format_signature_output(out, batch_shape)
@@ -488,11 +435,13 @@ function _log_sig_combine_backprop(
     out2 = Matrix{S}(undef, len, batch_size)
 
     if batch_size != 0 && len != 0
-        prepare_log_sig(dimension, degree, 2)
-        _log_sig_combine_backprop_c!(
-            out1, out2, derivs_c, log_sig1_c, log_sig2_c,
-            batch_size, dimension, degree, n_jobs,
-        )
+        lock(_cache_lock) do
+            prepare_log_sig(dimension, degree, _modern_abi[] ? 3 : 2)
+            _log_sig_combine_backprop_c!(
+                out1, out2, derivs_c, log_sig1_c, log_sig2_c,
+                batch_size, dimension, degree, n_jobs,
+            )
+        end
     end
 
     return _format_signature_output(out1, batch_shape),
@@ -516,14 +465,16 @@ function log_sig_join(
     S = _storage_eltype(T, :log_sig_join)
     len = log_sig_length(dimension, degree)
     log_sig_c, batch_shape, batch_size = _signature_like_buffer(log_sig_value, S, len, "log_sig")
-    displacement_c = _displacement_buffer(displacement, S, dimension, batch_shape, batch_size, "displacement")
+    displacement_c = _signature_buffer(displacement, S, dimension, batch_shape, batch_size, "displacement")
     out = Matrix{S}(undef, len, batch_size)
 
     if batch_size != 0 && len != 0
-        prepare_log_sig(dimension, degree, 2)
-        _log_sig_join_c!(
-            out, log_sig_c, displacement_c, batch_size, dimension, degree, n_jobs,
-        )
+        lock(_cache_lock) do
+            prepare_log_sig(dimension, degree, _modern_abi[] ? 3 : 2)
+            _log_sig_join_c!(
+                out, log_sig_c, displacement_c, batch_size, dimension, degree, n_jobs,
+            )
+        end
     end
 
     return _format_signature_output(out, batch_shape)
@@ -542,19 +493,21 @@ function _log_sig_join_backprop(
     S = _storage_eltype(T, :_log_sig_join_backprop)
     len = log_sig_length(dimension, degree)
     log_sig_c, batch_shape, batch_size = _signature_like_buffer(log_sig_value, S, len, "log_sig")
-    displacement_c = _displacement_buffer(displacement, S, dimension, batch_shape, batch_size, "displacement")
+    displacement_c = _signature_buffer(displacement, S, dimension, batch_shape, batch_size, "displacement")
     derivs_c = _signature_buffer(derivs, S, len, batch_shape, batch_size, "derivs")
     out_log_sig = Matrix{S}(undef, len, batch_size)
     out_displacement = Matrix{S}(undef, dimension, batch_size)
 
     if batch_size != 0 && len != 0
-        prepare_log_sig(dimension, degree, 2)
-        _log_sig_join_backprop_c!(
-            out_log_sig, out_displacement, derivs_c, log_sig_c, displacement_c,
-            batch_size, dimension, degree, n_jobs,
-        )
+        lock(_cache_lock) do
+            prepare_log_sig(dimension, degree, _modern_abi[] ? 3 : 2)
+            _log_sig_join_backprop_c!(
+                out_log_sig, out_displacement, derivs_c, log_sig_c, displacement_c,
+                batch_size, dimension, degree, n_jobs,
+            )
+        end
     end
 
     return _format_signature_output(out_log_sig, batch_shape),
-        _format_displacement_output(out_displacement, batch_shape)
+        _format_signature_output(out_displacement, batch_shape)
 end

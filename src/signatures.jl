@@ -1,101 +1,3 @@
-_storage_eltype(::Type{Float32}, ::Symbol) = Float32
-_storage_eltype(::Type{Float64}, ::Symbol) = Float64
-
-function _storage_eltype(::Type{T}, function_name::Symbol) where {T<:Real}
-    throw(TypeError(function_name, "path eltype must be Float32 or Float64", Union{Float32,Float64}, T))
-end
-
-_storage_eltype(::Type{T}) where {T<:Real} = _storage_eltype(T, :sig)
-
-function _validate_standard_signature_options(correction, function_name::Symbol=:sig)
-    correction === nothing ||
-        throw(ArgumentError("correction is not supported by SigLib.$function_name yet"))
-    return nothing
-end
-
-function _path_buffer(path::AbstractArray{T,N}, function_name::Symbol=:sig) where {T<:Real,N}
-    N >= 2 || throw(ArgumentError("path must have at least rank 2"))
-
-    S = _storage_eltype(T, function_name)
-    A = path isa Array{S,N} ? path : Array{S,N}(path)
-    path_size = size(A)
-    len = path_size[end - 1]
-    dimension = path_size[end]
-    batch_shape = path_size[1:end - 2]
-    batch_size = isempty(batch_shape) ? 1 : prod(batch_shape)
-
-    dimension >= 1 || throw(ArgumentError("path has 0 channels; dimension must be positive"))
-    len >= 1 || throw(ArgumentError("path length must be positive"))
-
-    # Public shape follows pySigLib: (batch..., length, dimension). The C ABI is
-    # row-major [batch][length][dimension], equivalent to Julia (dimension, length, batch).
-    reshaped = reshape(A, batch_size, len, dimension)
-    return permutedims(reshaped, (3, 2, 1)), batch_shape, batch_size, dimension, len
-end
-
-function _format_signature_output(out::Matrix{T}, batch_shape::Tuple) where {T}
-    if isempty(batch_shape)
-        return out[:, 1]
-    end
-
-    batch_first = permutedims(out, (2, 1))
-    return reshape(batch_first, batch_shape..., size(out, 1))
-end
-
-function _signature_buffer(
-    x::AbstractArray,
-    ::Type{T},
-    siglen::Integer,
-    batch_shape::Tuple,
-    batch_size::Integer,
-    name::AbstractString,
-) where {T<:Union{Float32,Float64}}
-    expected_size = isempty(batch_shape) ? (siglen,) : (batch_shape..., siglen)
-    size(x) == expected_size ||
-        throw(ArgumentError("$name must have shape $expected_size, got $(size(x))"))
-
-    A = x isa Array{T} ? x : Array{T}(x)
-    if isempty(batch_shape)
-        return reshape(A, siglen, batch_size)
-    end
-
-    batch_first = reshape(A, batch_size, siglen)
-    return permutedims(batch_first, (2, 1))
-end
-
-function _format_path_output(out::Array{T,3}, batch_shape::Tuple) where {T}
-    dimension, len, _ = size(out)
-    batch_first = permutedims(out, (3, 2, 1))
-    if isempty(batch_shape)
-        return reshape(batch_first, len, dimension)
-    end
-
-    return reshape(batch_first, batch_shape..., len, dimension)
-end
-
-function _signature_like_buffer(
-    x::AbstractArray{T,N},
-    ::Type{S},
-    siglen::Integer,
-    name::AbstractString,
-) where {T<:Real,N,S<:Union{Float32,Float64}}
-    N >= 1 || throw(ArgumentError("$name must have at least rank 1"))
-
-    batch_shape = size(x)[1:end - 1]
-    expected_size = isempty(batch_shape) ? (siglen,) : (batch_shape..., siglen)
-    size(x) == expected_size ||
-        throw(ArgumentError("$name must have shape $expected_size, got $(size(x))"))
-
-    A = x isa Array{S,N} ? x : Array{S,N}(x)
-    batch_size = isempty(batch_shape) ? 1 : prod(batch_shape)
-    if isempty(batch_shape)
-        return reshape(A, siglen, batch_size), batch_shape, batch_size
-    end
-
-    batch_first = reshape(A, batch_size, siglen)
-    return permutedims(batch_first, (2, 1)), batch_shape, batch_size
-end
-
 """
     sig(path, degree; time_aug=false, lead_lag=false, end_time=1.0,
         horner=true, scalar_term=false, correction=nothing, n_jobs=1)
@@ -124,11 +26,23 @@ function sig(
     _validate_standard_signature_options(correction)
 
     path_c, batch_shape, batch_size, dimension, len = _path_buffer(path)
+    out = _sig_from_buffer(
+        path_c, batch_size, dimension, len, degree;
+        time_aug=time_aug, lead_lag=lead_lag, end_time=end_time,
+        horner=horner, scalar_term=scalar_term, n_jobs=n_jobs,
+    )
+    return _format_signature_output(out, batch_shape)
+end
+
+function _sig_from_buffer(
+    path_c::Array{T,3}, batch_size, dimension, len, degree;
+    time_aug=false, lead_lag=false, end_time=1.0, horner=true, scalar_term=false, n_jobs=1,
+) where {T<:Union{Float32,Float64}}
     siglen = sig_length(
         dimension, degree;
         time_aug=time_aug, lead_lag=lead_lag, scalar_term=scalar_term,
     )
-    out = Matrix{eltype(path_c)}(undef, siglen, batch_size)
+    out = Matrix{T}(undef, siglen, batch_size)
 
     if batch_size != 0 && siglen != 0
         _signature_c!(
@@ -137,7 +51,7 @@ function sig(
         )
     end
 
-    return _format_signature_output(out, batch_shape)
+    return out
 end
 
 function _sig_backprop(

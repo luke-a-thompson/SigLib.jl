@@ -10,6 +10,7 @@ build/
 *.jl.cov
 *.jl.*.cov
 Manifest-v*.toml
+Manifest.toml
 
 docs/build/
 docs/site/

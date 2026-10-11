@@ -34,14 +34,16 @@ function branched_sig(
     out = Matrix{eltype(path_c)}(undef, siglen, batch_size)
 
     if batch_size != 0 && siglen != 0
-        prepare_branched_sig(
-            dimension, max_nodes;
-            time_aug=time_aug, lead_lag=lead_lag, planar=planar,
-        )
-        _branched_sig_c!(
-            out, path_c, batch_size, dimension, len, max_nodes,
-            time_aug, lead_lag, planar, scalar_term, n_jobs, end_time,
-        )
+        lock(_cache_lock) do
+            prepare_branched_sig(
+                dimension, max_nodes;
+                time_aug=time_aug, lead_lag=lead_lag, planar=planar,
+            )
+            _branched_sig_c!(
+                out, path_c, batch_size, dimension, len, max_nodes,
+                time_aug, lead_lag, planar, scalar_term, n_jobs, end_time,
+            )
+        end
     end
 
     return _format_signature_output(out, batch_shape)
@@ -77,15 +79,17 @@ function branched_sig_combine(
     out = Matrix{S}(undef, siglen, batch_size)
 
     if batch_size != 0 && siglen != 0
-        prepare_branched_sig(
-            dimension, max_nodes;
-            time_aug=time_aug, lead_lag=lead_lag, planar=planar,
-        )
-        effective_dimension = _effective_dimension(dimension, time_aug, lead_lag)
-        _branched_sig_combine_c!(
-            out, bsig1_c, bsig2_c, batch_size, effective_dimension, max_nodes,
-            planar, scalar_term, n_jobs,
-        )
+        lock(_cache_lock) do
+            prepare_branched_sig(
+                dimension, max_nodes;
+                time_aug=time_aug, lead_lag=lead_lag, planar=planar,
+            )
+            effective_dimension = _effective_dimension(dimension, time_aug, lead_lag)
+            _branched_sig_combine_c!(
+                out, bsig1_c, bsig2_c, batch_size, effective_dimension, max_nodes,
+                planar, scalar_term, n_jobs,
+            )
+        end
     end
 
     return _format_signature_output(out, batch_shape)
@@ -119,14 +123,16 @@ function _branched_sig_backprop(
 
     out_c = zeros(S, dimension, len, batch_size)
     if batch_size != 0 && siglen != 0
-        prepare_branched_sig(
-            dimension, max_nodes;
-            time_aug=time_aug, lead_lag=lead_lag, planar=planar,
-        )
-        _branched_sig_backprop_c!(
-            out_c, path_c, bsig_derivs_c, bsig_c, batch_size, dimension, len, max_nodes,
-            time_aug, lead_lag, planar, scalar_term, n_jobs, end_time,
-        )
+        lock(_cache_lock) do
+            prepare_branched_sig(
+                dimension, max_nodes;
+                time_aug=time_aug, lead_lag=lead_lag, planar=planar,
+            )
+            _branched_sig_backprop_c!(
+                out_c, path_c, bsig_derivs_c, bsig_c, batch_size, dimension, len, max_nodes,
+                time_aug, lead_lag, planar, scalar_term, n_jobs, end_time,
+            )
+        end
     end
 
     return _format_path_output(out_c, batch_shape)
@@ -158,15 +164,17 @@ function _branched_sig_combine_backprop(
     out2 = Matrix{S}(undef, siglen, batch_size)
 
     if batch_size != 0 && siglen != 0
-        prepare_branched_sig(
-            dimension, max_nodes;
-            time_aug=time_aug, lead_lag=lead_lag, planar=planar,
-        )
-        effective_dimension = _effective_dimension(dimension, time_aug, lead_lag)
-        _branched_sig_combine_backprop_c!(
-            out1, out2, bsig1_c, bsig2_c, derivs_c, batch_size,
-            effective_dimension, max_nodes, planar, scalar_term, n_jobs,
-        )
+        lock(_cache_lock) do
+            prepare_branched_sig(
+                dimension, max_nodes;
+                time_aug=time_aug, lead_lag=lead_lag, planar=planar,
+            )
+            effective_dimension = _effective_dimension(dimension, time_aug, lead_lag)
+            _branched_sig_combine_backprop_c!(
+                out1, out2, bsig1_c, bsig2_c, derivs_c, batch_size,
+                effective_dimension, max_nodes, planar, scalar_term, n_jobs,
+            )
+        end
     end
 
     return _format_signature_output(out1, batch_shape),

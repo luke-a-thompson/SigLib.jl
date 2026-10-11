@@ -25,15 +25,17 @@ function branched_sig_to_log_sig(
     out = Matrix{S}(undef, siglen, batch_size)
 
     if batch_size != 0 && siglen != 0
-        prepare_branched_sig(
-            dimension, max_nodes;
-            time_aug=time_aug, lead_lag=lead_lag, planar=planar,
-        )
-        effective_dimension = _effective_dimension(dimension, time_aug, lead_lag)
-        _branched_sig_to_log_sig_c!(
-            out, bsig_c, batch_size, effective_dimension, max_nodes,
-            planar, scalar_term, n_jobs,
-        )
+        lock(_cache_lock) do
+            prepare_branched_sig(
+                dimension, max_nodes;
+                time_aug=time_aug, lead_lag=lead_lag, planar=planar,
+            )
+            effective_dimension = _effective_dimension(dimension, time_aug, lead_lag)
+            _branched_sig_to_log_sig_c!(
+                out, bsig_c, batch_size, effective_dimension, max_nodes,
+                planar, scalar_term, n_jobs,
+            )
+        end
     end
 
     return _format_signature_output(out, batch_shape)
@@ -100,15 +102,17 @@ function _branched_sig_to_log_sig_backprop(
     out = Matrix{S}(undef, siglen, batch_size)
 
     if batch_size != 0 && siglen != 0
-        prepare_branched_sig(
-            dimension, max_nodes;
-            time_aug=time_aug, lead_lag=lead_lag, planar=planar,
-        )
-        effective_dimension = _effective_dimension(dimension, time_aug, lead_lag)
-        _branched_sig_to_log_sig_backprop_c!(
-            out, bsig_c, derivs_c, batch_size, effective_dimension, max_nodes,
-            planar, scalar_term, n_jobs,
-        )
+        lock(_cache_lock) do
+            prepare_branched_sig(
+                dimension, max_nodes;
+                time_aug=time_aug, lead_lag=lead_lag, planar=planar,
+            )
+            effective_dimension = _effective_dimension(dimension, time_aug, lead_lag)
+            _branched_sig_to_log_sig_backprop_c!(
+                out, bsig_c, derivs_c, batch_size, effective_dimension, max_nodes,
+                planar, scalar_term, n_jobs,
+            )
+        end
     end
 
     return _format_signature_output(out, batch_shape)

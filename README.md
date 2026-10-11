@@ -1,10 +1,18 @@
 # SigLib.jl
 
-**SigLib.jl** is a compact Julia wrapper around `cpsig_jll`, providing a Julia-facing interface to [SigLib's](https://github.com/daniil-shmelev/pySigLib/tree/main/siglib) path-signature routines while keeping conventions close to [pySigLib](https://github.com/daniil-shmelev/pySigLib).
+**SigLib.jl** calls [pySigLib's native cpSIG library](https://github.com/daniil-shmelev/pySigLib/tree/main/siglib) through Julia artifacts. Python and a compiler are unnecessary. The interface follows pySigLib's array shapes and signature conventions, with optional ChainRules derivatives.
+
+```julia
+using SigLib
+path = [0.0 0.0; 0.5 1.0; 1.0 -0.25] # (length, dimension)
+sig(path, 2)
+log_sig(path, 2; method=2)
+branched_sig(path, 2)
+```
 
 ## Documentation
 
-Package notes live in [`docs/src/index.md`](docs/src/index.md).
+See [`docs/src/index.md`](docs/src/index.md) for supported operations, installation, native artifact updates, and extension conventions. The bootstrap artifact currently supports Linux x86-64 with glibc; upstream release manifests also provide Windows x86-64 and Apple Silicon macOS binaries.
 
 ## License
 
