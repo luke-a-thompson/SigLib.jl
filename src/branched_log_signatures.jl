@@ -1,3 +1,5 @@
+_validate_branched_log_sig_degree(::AbstractArray, degree, method) = nothing
+
 function _branched_log_sig_method(method::Union{Nothing,Integer}, planar::Bool; conversion::Bool=false)
     m = method === nothing ? Cint(planar) : _as_log_sig_method(method)
     m != 0 && !planar && throw(ArgumentError("branched log signature methods 1–3 require planar=true"))
@@ -36,10 +38,10 @@ function branched_sig_to_log_sig(
     _as_cint_n_jobs(n_jobs)
     bsig_c, batch_shape, batch_size, d, scalar_term, outlen =
         _branched_log_sig_input(bsig, dimension, degree, time_aug, lead_lag, planar, m)
-    out = Matrix{eltype(bsig_c)}(undef, outlen, batch_size)
+    out = _allocate(bsig_c, outlen, batch_size)
     if batch_size != 0 && outlen != 0
         lock(_cache_lock) do
-            prepare_branched_log_sig(d, degree, m; planar=planar)
+            _prepare_branched_log_sig_for(bsig_c, d, degree, m; planar=planar)
             _branched_sig_to_log_sig_c!(out, bsig_c, batch_size, d, degree, planar, scalar_term, n_jobs, m)
         end
     end
@@ -58,6 +60,7 @@ function branched_log_sig(
     correction=nothing, n_jobs::Integer=1,
 ) where {T<:Real,N}
     m = _branched_log_sig_method(method, planar)
+    _validate_branched_log_sig_degree(path, degree, m)
     _as_cint_n_jobs(n_jobs)
     correction isa AbstractArray && isempty(correction) && (correction = nothing)
     _validate_standard_signature_options(correction, :branched_log_sig)
@@ -65,12 +68,12 @@ function branched_log_sig(
         path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :branched_log_sig)
         d = _effective_dimension(dimension, time_aug, lead_lag)
         outlen = branched_log_sig_length(d, degree; planar=true)
-        out = Matrix{eltype(path_c)}(undef, outlen, batch_size)
+        out = _allocate(path_c, outlen, batch_size)
         if batch_size != 0 && outlen != 0
             lock(_cache_lock) do
                 transformed_path, d, len = _transformed_path_for_log_sig(
                     path_c, batch_size, dimension, len, time_aug, lead_lag, end_time, n_jobs)
-                prepare_branched_log_sig(d, degree, 3; planar=true)
+                _prepare_branched_log_sig_for(path_c, d, degree, 3; planar=true)
                 _branched_log_sig_from_path_c!(out, transformed_path, batch_size, len, d, degree, n_jobs)
             end
         end
@@ -92,11 +95,11 @@ function _branched_sig_to_log_sig_backprop(
     _as_cint_n_jobs(n_jobs)
     bsig_c, batch_shape, batch_size, d, scalar_term, outlen =
         _branched_log_sig_input(bsig, dimension, degree, time_aug, lead_lag, planar, m)
-    derivs_c = _signature_buffer(derivs, eltype(bsig_c), outlen, batch_shape, batch_size, "derivs")
-    out = zeros(eltype(bsig_c), size(bsig_c))
+    derivs_c = _signature_buffer(derivs, eltype(bsig_c), outlen, batch_shape, batch_size, "derivs", bsig_c)
+    out = _allocate(bsig_c, size(bsig_c)...; zero=true)
     if batch_size != 0 && outlen != 0
         lock(_cache_lock) do
-            prepare_branched_log_sig(d, degree, m; planar=planar)
+            _prepare_branched_log_sig_for(bsig_c, d, degree, m; planar=planar)
             _branched_sig_to_log_sig_backprop_c!(out, bsig_c, derivs_c, batch_size, d, degree, planar, scalar_term, n_jobs, m)
         end
     end
@@ -108,18 +111,19 @@ function _branched_log_sig_from_path_backprop(
     time_aug::Bool=false, lead_lag::Bool=false, end_time::Real=1.0, n_jobs::Integer=1,
 )
     _branched_log_sig_method(3, true)
+    _validate_branched_log_sig_degree(path, degree, 3)
     _as_cint_n_jobs(n_jobs)
     path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :branched_log_sig)
     d = _effective_dimension(dimension, time_aug, lead_lag)
     outlen = branched_log_sig_length(d, degree; planar=true)
-    derivs_c = _signature_buffer(derivs, eltype(path_c), outlen, batch_shape, batch_size, "derivs")
-    out = zeros(eltype(path_c), dimension, len, batch_size)
+    derivs_c = _signature_buffer(derivs, eltype(path_c), outlen, batch_shape, batch_size, "derivs", path_c)
+    out = _allocate(path_c, dimension, len, batch_size; zero=true)
     if batch_size != 0 && outlen != 0
         lock(_cache_lock) do
             transformed_path, transformed_dimension, transformed_len = _transformed_path_for_log_sig(
                 path_c, batch_size, dimension, len, time_aug, lead_lag, end_time, n_jobs)
-            prepare_branched_log_sig(d, degree, 3; planar=true)
-            transformed_out = (time_aug || lead_lag) ? zeros(eltype(path_c), transformed_dimension, transformed_len, batch_size) : out
+            _prepare_branched_log_sig_for(path_c, d, degree, 3; planar=true)
+            transformed_out = (time_aug || lead_lag) ? _allocate(path_c, transformed_dimension, transformed_len, batch_size; zero=true) : out
             _branched_log_sig_from_path_backprop_c!(transformed_out, derivs_c, transformed_path,
                 batch_size, transformed_len, transformed_dimension, degree, n_jobs)
             if time_aug || lead_lag

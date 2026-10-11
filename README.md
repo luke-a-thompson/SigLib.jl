@@ -1,6 +1,6 @@
 # SigLib.jl
 
-**SigLib.jl** calls [pySigLib's native cpSIG library](https://github.com/daniil-shmelev/pySigLib/tree/main/siglib) through Julia artifacts. Python and a compiler are unnecessary. The interface follows pySigLib's array shapes and signature conventions, with optional ChainRules derivatives.
+**SigLib.jl** calls [pySigLib's native cpSIG/cuSIG libraries](https://github.com/daniil-shmelev/pySigLib/tree/main/siglib) through Julia artifacts. Python and a compiler are unnecessary. The interface follows pySigLib's array shapes and signature conventions, with optional CUDA and ChainRules extensions.
 
 ```julia
 using SigLib

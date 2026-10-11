@@ -1,6 +1,6 @@
 # SigLib.jl
 
-`SigLib.jl` wraps the native cpSIG library using checked, version-pinned Julia artifacts. Install this unregistered package with `Pkg.add(url="https://github.com/luke-a-thompson/SigLib.jl")`, or use `Pkg.develop(path=".")` from a local checkout.
+`SigLib.jl` wraps the native cpSIG/cuSIG libraries using checked, version-pinned Julia artifacts. Install this unregistered package with `Pkg.add(url="https://github.com/luke-a-thompson/SigLib.jl")`, or use `Pkg.develop(path=".")` from a local checkout.
 
 The implemented API covers standard and branched signatures, log signatures, conversions, and selected composition operations:
 
@@ -36,9 +36,32 @@ Load `ChainRulesCore` to enable reverse-mode rules for the numerical operations.
 
 In-memory caches prepare automatically. Use `set_cache_dir(directory)` before requesting persistent disk caches with `use_disk=true`; SigLib creates the parent directory. The legacy 3.1 binary uses a temporary directory for its in-memory cache bookkeeping. Upstream 4.x does not need that directory.
 
+## CUDA
+
+Install CUDA.jl 5.x and pass `CuArray` inputs to the same functions. All currently implemented numerical operations and their ChainRules pullbacks run through native cuSIG; packing, results, and gradients stay on the GPU. Load ChainRulesCore when derivatives are needed.
+
+```julia
+using SigLib, CUDA, ChainRulesCore
+path = CuArray([0.0 0.0; 0.5 1.0; 1.0 -0.25])
+sig(path, 3)                              # CuVector
+branched_log_sig(path, 3; planar=true)     # CuVector
+clear_log_sig_cache(; device=:cuda)
+```
+
+Multiple inputs must use the same backend and CUDA context; views are packed on the GPU. Calls activate the input's context and synchronize the device before and after native work because cuSIG manages its own streams and accepts no caller stream. Native calls are synchronous. `n_jobs` controls CPU calls and has no effect on CUDA calls. Upstream limits direct planar branched BCH (method 3) to degree 20 on CUDA.
+
+Cache preparation is automatic on the input device. Explicit cache controls accept `device=:cpu` (default), `:cuda`, or `:both`; CUDA preparation uses the active device; clearing affects native caches across devices. CUDA is optional for CPU users, and loading CUDA.jl alone does not load the cuSIG artifact. GPU support requires the upstream 4.x release manifest described below; the legacy bootstrap supports CPU calls.
+
+Run the separate hardware suite on a machine with a working NVIDIA GPU and the matching artifacts:
+
+```sh
+julia --project=test/cuda -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+julia --project=test/cuda --threads=4 test/cuda/runtests.jl
+```
+
 ## Native artifacts
 
-The root `Artifacts.toml` currently pins the existing, verified 3.1 bootstrap binary. Import the published upstream manifest with `julia scripts/update_artifacts.jl vVERSION`, then run `julia --project -e 'using Pkg; Pkg.test()'` before committing it. The updater checks artifact hashes, download checksums, and release URLs before replacing the file. It retains any lazy CUDA entries for future GPU support; the current loader loads only the CPU artifact.
+The root `Artifacts.toml` currently pins the existing, verified 3.1 bootstrap binary. Import the published upstream manifest with `julia scripts/update_artifacts.jl vVERSION`, then run `julia --project -e 'using Pkg; Pkg.test()'` before committing it. The updater checks artifact hashes, download checksums, and release URLs before replacing the file. CUDA calls load the lazy `pysiglib_cuda12` artifact on first use. CPU and CUDA artifacts must come from the same 4.x release.
 
 The loader accepts the upstream `pysiglib/` layout and the bootstrap `lib/` layout, loads Windows TBB dependencies, and selects the 3.1 or 4.x branched-conversion ABI by native capability. cpSIG 4 changes planar branched-signature coordinates, so stored planar coefficients must stay associated with their native version. Julia artifact overrides can select a local build for development without changing package code.
 
@@ -46,6 +69,6 @@ Upstream CPU artifacts cover Linux/Windows x86-64 and macOS arm64. Their minimum
 
 ## Extending the wrapper
 
-`library.jl` owns loading, `c_api.jl` owns concrete float/double ABI calls, `buffers.jl` owns validation and array layout, and the numerical files own public operations. Add native bindings using the existing typed loop pattern, use the shared buffers, and hold `_cache_lock` across preparation and native cache use. Add derivatives in the optional ChainRules extension. Test algebraic identities, batch/view equivalence, both precisions, and finite-difference pullbacks where applicable.
+`library.jl` owns loading, `c_api.jl` owns concrete float/double ABI calls, `buffers.jl` owns validation and array layout, and the numerical files own public operations. Add native bindings using the existing typed loop pattern, use the shared buffers, and hold `_cache_lock` across preparation and native cache use. Add CUDA bindings in `ext/cuda/c_api.jl` and derivatives in the optional ChainRules extension. Test algebraic identities, batch/view equivalence, both precisions, and finite-difference pullbacks where applicable.
 
-Full pySigLib coverage still requires ordinary signature combine/join, branched joins and straight-line operations, coefficient and prefix operations, signature kernels and metrics, streaming, corrections, word/tree utilities, and CUDA support. These can extend the existing layers. GPU operations will need a separate loader and array dispatch, with explicit device/context and stream handling.
+Full pySigLib coverage still requires ordinary signature combine/join, branched joins and straight-line operations, coefficient and prefix operations, signature kernels and metrics, streaming, corrections, and word/tree utilities. These can extend the existing layers.

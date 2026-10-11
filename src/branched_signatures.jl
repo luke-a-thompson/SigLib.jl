@@ -31,11 +31,11 @@ function branched_sig(
         dimension, max_nodes;
         time_aug=time_aug, lead_lag=lead_lag, planar=planar, scalar_term=scalar_term,
     )
-    out = Matrix{eltype(path_c)}(undef, siglen, batch_size)
+    out = _allocate(path_c, siglen, batch_size)
 
     if batch_size != 0 && siglen != 0
         lock(_cache_lock) do
-            prepare_branched_sig(
+            _prepare_branched_sig_for(path_c,
                 dimension, max_nodes;
                 time_aug=time_aug, lead_lag=lead_lag, planar=planar,
             )
@@ -75,12 +75,12 @@ function branched_sig_combine(
         time_aug=time_aug, lead_lag=lead_lag, planar=planar, scalar_term=scalar_term,
     )
     bsig1_c, batch_shape, batch_size = _signature_like_buffer(bsig1, S, siglen, "bsig1")
-    bsig2_c = _signature_buffer(bsig2, S, siglen, batch_shape, batch_size, "bsig2")
-    out = Matrix{S}(undef, siglen, batch_size)
+    bsig2_c = _signature_buffer(bsig2, S, siglen, batch_shape, batch_size, "bsig2", bsig1_c)
+    out = _allocate(bsig1_c, siglen, batch_size)
 
     if batch_size != 0 && siglen != 0
         lock(_cache_lock) do
-            prepare_branched_sig(
+            _prepare_branched_sig_for(bsig1_c,
                 dimension, max_nodes;
                 time_aug=time_aug, lead_lag=lead_lag, planar=planar,
             )
@@ -118,13 +118,13 @@ function _branched_sig_backprop(
         dimension, max_nodes;
         time_aug=time_aug, lead_lag=lead_lag, planar=planar, scalar_term=scalar_term,
     )
-    bsig_c = _signature_buffer(bsig_value, S, siglen, batch_shape, batch_size, "bsig_value")
-    bsig_derivs_c = _signature_buffer(bsig_derivs, S, siglen, batch_shape, batch_size, "bsig_derivs")
+    bsig_c = _signature_buffer(bsig_value, S, siglen, batch_shape, batch_size, "bsig_value", path_c)
+    bsig_derivs_c = _signature_buffer(bsig_derivs, S, siglen, batch_shape, batch_size, "bsig_derivs", path_c)
 
-    out_c = zeros(S, dimension, len, batch_size)
+    out_c = _allocate(path_c, dimension, len, batch_size; zero=true)
     if batch_size != 0 && siglen != 0
         lock(_cache_lock) do
-            prepare_branched_sig(
+            _prepare_branched_sig_for(path_c,
                 dimension, max_nodes;
                 time_aug=time_aug, lead_lag=lead_lag, planar=planar,
             )
@@ -158,14 +158,14 @@ function _branched_sig_combine_backprop(
         time_aug=time_aug, lead_lag=lead_lag, planar=planar, scalar_term=scalar_term,
     )
     bsig1_c, batch_shape, batch_size = _signature_like_buffer(bsig1, S, siglen, "bsig1")
-    bsig2_c = _signature_buffer(bsig2, S, siglen, batch_shape, batch_size, "bsig2")
-    derivs_c = _signature_buffer(derivs, S, siglen, batch_shape, batch_size, "derivs")
-    out1 = Matrix{S}(undef, siglen, batch_size)
-    out2 = Matrix{S}(undef, siglen, batch_size)
+    bsig2_c = _signature_buffer(bsig2, S, siglen, batch_shape, batch_size, "bsig2", bsig1_c)
+    derivs_c = _signature_buffer(derivs, S, siglen, batch_shape, batch_size, "derivs", bsig1_c)
+    out1 = _allocate(bsig1_c, siglen, batch_size)
+    out2 = _allocate(bsig1_c, siglen, batch_size)
 
     if batch_size != 0 && siglen != 0
         lock(_cache_lock) do
-            prepare_branched_sig(
+            _prepare_branched_sig_for(bsig1_c,
                 dimension, max_nodes;
                 time_aug=time_aug, lead_lag=lead_lag, planar=planar,
             )

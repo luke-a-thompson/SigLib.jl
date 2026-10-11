@@ -1,0 +1,10 @@
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+SigLib = "1834686d-7328-474a-962d-7da3235ed9d5"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+CUDA = "5"
+ChainRulesCore = "1"
+julia = "1.10"

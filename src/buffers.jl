@@ -43,33 +43,58 @@ function _validate_standard_signature_options(correction, function_name::Symbol=
     return nothing
 end
 
-function _path_buffer(path::AbstractArray{T,N}, function_name::Symbol=:sig) where {T<:Real,N}
-    N >= 2 || throw(ArgumentError("path must have at least rank 2"))
+# Backend hooks keep layout, validation and numerical flows shared by CPU and CUDA.
+_backend(::AbstractArray) = :cpu
+_with_array(f, ::AbstractArray) = f()
+_materialize(x::AbstractArray, ::Type{T}) where {T} = x isa Array{T} ? x : Array{T}(x)
 
-    S = _storage_eltype(T, function_name)
-    A = path isa Array{S,N} ? path : Array{S,N}(path)
-    path_size = size(A)
-    len = path_size[end - 1]
-    dimension = path_size[end]
-    batch_shape = path_size[1:end - 2]
-    batch_size = isempty(batch_shape) ? 1 : prod(batch_shape)
+# GPU permutation kernels need a nonempty launch grid.
+_permute(x, axes) = isempty(x) ? similar(x, map(i -> size(x, i), axes)) : permutedims(x, axes)
 
-    dimension >= 1 || throw(ArgumentError("path has 0 channels; dimension must be positive"))
-    len >= 1 || throw(ArgumentError("path length must be positive"))
-
-    # Public shape follows pySigLib: (batch..., length, dimension). The C ABI is
-    # row-major [batch][length][dimension], equivalent to Julia (dimension, length, batch).
-    reshaped = reshape(A, batch_size, len, dimension)
-    return permutedims(reshaped, (3, 2, 1)), batch_shape, batch_size, dimension, len
+function _allocate(like::AbstractArray, dims::Integer...; zero::Bool=false)
+    return _with_array(like) do
+        out = similar(like, dims...)
+        zero && fill!(out, Base.zero(eltype(out)))
+        out
+    end
 end
 
-function _format_signature_output(out::Matrix{T}, batch_shape::Tuple) where {T}
-    if isempty(batch_shape)
-        return vec(out)
-    end
+function _check_backend(like::AbstractArray, x::AbstractArray)
+    _backend(like) == _backend(x) || throw(ArgumentError("all inputs must use the same CPU or CUDA backend"))
+    return nothing
+end
 
-    batch_first = permutedims(out, (2, 1))
-    return reshape(batch_first, batch_shape..., size(out, 1))
+function _path_buffer(path::AbstractArray{T,N}, function_name::Symbol=:sig) where {T<:Real,N}
+    return _with_array(path) do
+        N >= 2 || throw(ArgumentError("path must have at least rank 2"))
+
+        S = _storage_eltype(T, function_name)
+        A = _materialize(path, S)
+        path_size = size(A)
+        len = path_size[end - 1]
+        dimension = path_size[end]
+        batch_shape = path_size[1:end - 2]
+        batch_size = isempty(batch_shape) ? 1 : prod(batch_shape)
+
+        dimension >= 1 || throw(ArgumentError("path has 0 channels; dimension must be positive"))
+        len >= 1 || throw(ArgumentError("path length must be positive"))
+
+        # Public shape follows pySigLib: (batch..., length, dimension). The C ABI is
+        # row-major [batch][length][dimension], equivalent to Julia (dimension, length, batch).
+        reshaped = reshape(A, batch_size, len, dimension)
+        return _permute(reshaped, (3, 2, 1)), batch_shape, batch_size, dimension, len
+    end
+end
+
+function _format_signature_output(out::AbstractMatrix{T}, batch_shape::Tuple) where {T}
+    return _with_array(out) do
+        if isempty(batch_shape)
+            return vec(out)
+        end
+
+        batch_first = _permute(out, (2, 1))
+        return reshape(batch_first, batch_shape..., size(out, 1))
+    end
 end
 
 function _signature_buffer(
@@ -79,28 +104,34 @@ function _signature_buffer(
     batch_shape::Tuple,
     batch_size::Integer,
     name::AbstractString,
+    like::AbstractArray=x,
 ) where {T<:Union{Float32,Float64}}
-    expected_size = isempty(batch_shape) ? (siglen,) : (batch_shape..., siglen)
-    size(x) == expected_size ||
-        throw(ArgumentError("$name must have shape $expected_size, got $(size(x))"))
+    return _with_array(x) do
+        expected_size = isempty(batch_shape) ? (siglen,) : (batch_shape..., siglen)
+        size(x) == expected_size ||
+            throw(ArgumentError("$name must have shape $expected_size, got $(size(x))"))
 
-    A = x isa Array{T} ? x : Array{T}(x)
-    if isempty(batch_shape)
-        return reshape(A, siglen, batch_size)
+        _check_backend(like, x)
+        A = _materialize(x, T)
+        if isempty(batch_shape)
+            return reshape(A, siglen, batch_size)
+        end
+
+        batch_first = reshape(A, batch_size, siglen)
+        return _permute(batch_first, (2, 1))
     end
-
-    batch_first = reshape(A, batch_size, siglen)
-    return permutedims(batch_first, (2, 1))
 end
 
-function _format_path_output(out::Array{T,3}, batch_shape::Tuple) where {T}
-    dimension, len, _ = size(out)
-    batch_first = permutedims(out, (3, 2, 1))
-    if isempty(batch_shape)
-        return reshape(batch_first, len, dimension)
-    end
+function _format_path_output(out::AbstractArray{T,3}, batch_shape::Tuple) where {T}
+    return _with_array(out) do
+        dimension, len, _ = size(out)
+        batch_first = _permute(out, (3, 2, 1))
+        if isempty(batch_shape)
+            return reshape(batch_first, len, dimension)
+        end
 
-    return reshape(batch_first, batch_shape..., len, dimension)
+        return reshape(batch_first, batch_shape..., len, dimension)
+    end
 end
 
 function _signature_like_buffer(

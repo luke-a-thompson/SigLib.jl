@@ -35,14 +35,14 @@ function sig(
 end
 
 function _sig_from_buffer(
-    path_c::Array{T,3}, batch_size, dimension, len, degree;
+    path_c::AbstractArray{T,3}, batch_size, dimension, len, degree;
     time_aug=false, lead_lag=false, end_time=1.0, horner=true, scalar_term=false, n_jobs=1,
 ) where {T<:Union{Float32,Float64}}
     siglen = sig_length(
         dimension, degree;
         time_aug=time_aug, lead_lag=lead_lag, scalar_term=scalar_term,
     )
-    out = Matrix{T}(undef, siglen, batch_size)
+    out = _allocate(path_c, siglen, batch_size)
 
     if batch_size != 0 && siglen != 0
         _signature_c!(
@@ -76,10 +76,10 @@ function _sig_backprop(
         dimension, degree;
         time_aug=time_aug, lead_lag=lead_lag, scalar_term=scalar_term,
     )
-    sig_c = _signature_buffer(sig_value, S, siglen, batch_shape, batch_size, "sig_value")
-    sig_derivs_c = _signature_buffer(sig_derivs, S, siglen, batch_shape, batch_size, "sig_derivs")
+    sig_c = _signature_buffer(sig_value, S, siglen, batch_shape, batch_size, "sig_value", path_c)
+    sig_derivs_c = _signature_buffer(sig_derivs, S, siglen, batch_shape, batch_size, "sig_derivs", path_c)
 
-    out_c = zeros(S, dimension, len, batch_size)
+    out_c = _allocate(path_c, dimension, len, batch_size; zero=true)
     if batch_size != 0 && siglen != 0
         _sig_backprop_c!(
             out_c, path_c, sig_derivs_c, sig_c, batch_size, dimension, len, degree,

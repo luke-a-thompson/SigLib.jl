@@ -18,6 +18,7 @@ function _log_sig_output_length(
 end
 
 function _prepare_log_sig_if_needed(
+    like::AbstractArray,
     dimension::Integer,
     degree::Integer,
     method::Integer;
@@ -25,7 +26,7 @@ function _prepare_log_sig_if_needed(
     lead_lag::Bool=false,
 )
     if method == 1 || method == 2
-        prepare_log_sig(dimension, degree, method; time_aug=time_aug, lead_lag=lead_lag)
+        _prepare_log_sig_for(like, dimension, degree, method; time_aug=time_aug, lead_lag=lead_lag)
     end
     return nothing
 end
@@ -84,7 +85,7 @@ function _log_sig_buffer(
 end
 
 function _transformed_path_for_log_sig(
-    path_c::Array{T,3},
+    path_c::AbstractArray{T,3},
     batch_size::Integer,
     dimension::Integer,
     len::Integer,
@@ -99,7 +100,7 @@ function _transformed_path_for_log_sig(
         return path_c, dimension, len
     end
 
-    out = Array{T,3}(undef, transformed_dimension, transformed_len, batch_size)
+    out = _allocate(path_c, transformed_dimension, transformed_len, batch_size)
     _transform_path_c!(
         out, path_c, batch_size, dimension, len,
         time_aug, lead_lag, end_time, n_jobs,
@@ -134,11 +135,12 @@ function sig_to_log_sig(
         dimension, degree, method, scalar_term;
         time_aug=time_aug, lead_lag=lead_lag,
     )
-    out = Matrix{S}(undef, outlen, batch_size)
+    out = _allocate(sig_c, outlen, batch_size)
 
     if batch_size != 0 && outlen != 0
         lock(_cache_lock) do
             _prepare_log_sig_if_needed(
+                sig_c,
                 dimension, degree, method;
                 time_aug=time_aug, lead_lag=lead_lag,
             )
@@ -181,11 +183,12 @@ function logsig_to_sig(
         dimension, degree;
         time_aug=time_aug, lead_lag=lead_lag, scalar_term=output_scalar_term,
     )
-    out = Matrix{S}(undef, outlen, batch_size)
+    out = _allocate(log_sig_c, outlen, batch_size)
 
     if batch_size != 0 && outlen != 0
         lock(_cache_lock) do
             _prepare_log_sig_if_needed(
+                log_sig_c,
                 dimension, degree, method == 1 ? 2 : method;
                 time_aug=time_aug, lead_lag=lead_lag,
             )
@@ -222,13 +225,13 @@ function log_sig(
     if method == 3
         path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :log_sig)
         outlen = log_sig_length(dimension, degree; time_aug=time_aug, lead_lag=lead_lag)
-        out = Matrix{eltype(path_c)}(undef, outlen, batch_size)
+        out = _allocate(path_c, outlen, batch_size)
         if batch_size != 0 && outlen != 0
             lock(_cache_lock) do
                 transformed_path, transformed_dimension, transformed_len = _transformed_path_for_log_sig(
                     path_c, batch_size, dimension, len, time_aug, lead_lag, end_time, n_jobs,
                 )
-                prepare_log_sig(transformed_dimension, degree, 3)
+                _prepare_log_sig_for(path_c, transformed_dimension, degree, 3)
                 _log_sig_from_path_c!(
                     out, transformed_path, batch_size, transformed_len,
                     transformed_dimension, degree, n_jobs,
@@ -246,10 +249,10 @@ function log_sig(
         scalar_term=sig_scalar_term, n_jobs=n_jobs,
     )
     outlen = _log_sig_output_length(dimension, degree, method, sig_scalar_term; time_aug=time_aug, lead_lag=lead_lag)
-    out = Matrix{eltype(path_c)}(undef, outlen, batch_size)
+    out = _allocate(path_c, outlen, batch_size)
     if batch_size != 0 && outlen != 0
         lock(_cache_lock) do
-            _prepare_log_sig_if_needed(dimension, degree, method; time_aug=time_aug, lead_lag=lead_lag)
+            _prepare_log_sig_if_needed(path_c, dimension, degree, method; time_aug=time_aug, lead_lag=lead_lag)
             _sig_to_log_sig_c!(out, sig_c, batch_size, dimension, degree, time_aug, lead_lag, method, sig_scalar_term, n_jobs)
         end
     end
@@ -280,13 +283,14 @@ function _sig_to_log_sig_backprop(
         time_aug=time_aug, lead_lag=lead_lag,
     )
     log_sig_derivs_c = _signature_buffer(
-        log_sig_derivs, S, log_sig_len, batch_shape, batch_size, "log_sig_derivs",
+        log_sig_derivs, S, log_sig_len, batch_shape, batch_size, "log_sig_derivs", sig_c,
     )
-    out = Matrix{S}(undef, outlen, batch_size)
+    out = _allocate(sig_c, outlen, batch_size)
 
     if batch_size != 0 && outlen != 0
         lock(_cache_lock) do
             _prepare_log_sig_if_needed(
+                sig_c,
                 dimension, degree, method;
                 time_aug=time_aug, lead_lag=lead_lag,
             )
@@ -324,12 +328,13 @@ function _logsig_to_sig_backprop(
         dimension, degree;
         time_aug=time_aug, lead_lag=lead_lag, scalar_term=output_scalar_term,
     )
-    sig_derivs_c = _signature_buffer(sig_derivs, S, siglen, batch_shape, batch_size, "sig_derivs")
-    out = Matrix{S}(undef, size(log_sig_c, 1), batch_size)
+    sig_derivs_c = _signature_buffer(sig_derivs, S, siglen, batch_shape, batch_size, "sig_derivs", log_sig_c)
+    out = _allocate(log_sig_c, size(log_sig_c, 1), batch_size)
 
     if batch_size != 0 && size(out, 1) != 0
         lock(_cache_lock) do
             _prepare_log_sig_if_needed(
+                log_sig_c,
                 dimension, degree, method == 1 ? 2 : method;
                 time_aug=time_aug, lead_lag=lead_lag,
             )
@@ -359,16 +364,16 @@ function _log_sig_from_path_backprop(
     S = eltype(path_c)
     siglen = log_sig_length(dimension, degree; time_aug=time_aug, lead_lag=lead_lag)
     log_sig_derivs_c = _signature_buffer(
-        log_sig_derivs, S, siglen, batch_shape, batch_size, "log_sig_derivs",
+        log_sig_derivs, S, siglen, batch_shape, batch_size, "log_sig_derivs", path_c,
     )
-    out_c = zeros(S, dimension, len, batch_size)
+    out_c = _allocate(path_c, dimension, len, batch_size; zero=true)
     if batch_size != 0 && siglen != 0
         lock(_cache_lock) do
             transformed_path, transformed_dimension, transformed_len = _transformed_path_for_log_sig(
                 path_c, batch_size, dimension, len, time_aug, lead_lag, end_time, n_jobs,
             )
-            prepare_log_sig(transformed_dimension, degree, 3)
-            transformed_out = (time_aug || lead_lag) ? zeros(S, transformed_dimension, transformed_len, batch_size) : out_c
+            _prepare_log_sig_for(path_c, transformed_dimension, degree, 3)
+            transformed_out = (time_aug || lead_lag) ? _allocate(path_c, transformed_dimension, transformed_len, batch_size; zero=true) : out_c
             _log_sig_from_path_backprop_c!(
                 transformed_out, log_sig_derivs_c, transformed_path, batch_size,
                 transformed_len, transformed_dimension, degree, n_jobs,
@@ -401,12 +406,12 @@ function log_sig_combine(
     S = _storage_eltype(T, :log_sig_combine)
     len = log_sig_length(dimension, degree)
     log_sig1_c, batch_shape, batch_size = _signature_like_buffer(log_sig1, S, len, "log_sig1")
-    log_sig2_c = _signature_buffer(log_sig2, S, len, batch_shape, batch_size, "log_sig2")
-    out = Matrix{S}(undef, len, batch_size)
+    log_sig2_c = _signature_buffer(log_sig2, S, len, batch_shape, batch_size, "log_sig2", log_sig1_c)
+    out = _allocate(log_sig1_c, len, batch_size)
 
     if batch_size != 0 && len != 0
         lock(_cache_lock) do
-            prepare_log_sig(dimension, degree, _modern_abi[] ? 3 : 2)
+            _prepare_log_sig_for(log_sig1_c, dimension, degree, _modern_abi[] ? 3 : 2)
             _log_sig_combine_c!(
                 out, log_sig1_c, log_sig2_c, batch_size, dimension, degree, n_jobs,
             )
@@ -429,14 +434,14 @@ function _log_sig_combine_backprop(
     S = _storage_eltype(T, :_log_sig_combine_backprop)
     len = log_sig_length(dimension, degree)
     log_sig1_c, batch_shape, batch_size = _signature_like_buffer(log_sig1, S, len, "log_sig1")
-    log_sig2_c = _signature_buffer(log_sig2, S, len, batch_shape, batch_size, "log_sig2")
-    derivs_c = _signature_buffer(derivs, S, len, batch_shape, batch_size, "derivs")
-    out1 = Matrix{S}(undef, len, batch_size)
-    out2 = Matrix{S}(undef, len, batch_size)
+    log_sig2_c = _signature_buffer(log_sig2, S, len, batch_shape, batch_size, "log_sig2", log_sig1_c)
+    derivs_c = _signature_buffer(derivs, S, len, batch_shape, batch_size, "derivs", log_sig1_c)
+    out1 = _allocate(log_sig1_c, len, batch_size)
+    out2 = _allocate(log_sig1_c, len, batch_size)
 
     if batch_size != 0 && len != 0
         lock(_cache_lock) do
-            prepare_log_sig(dimension, degree, _modern_abi[] ? 3 : 2)
+            _prepare_log_sig_for(log_sig1_c, dimension, degree, _modern_abi[] ? 3 : 2)
             _log_sig_combine_backprop_c!(
                 out1, out2, derivs_c, log_sig1_c, log_sig2_c,
                 batch_size, dimension, degree, n_jobs,
@@ -465,12 +470,12 @@ function log_sig_join(
     S = _storage_eltype(T, :log_sig_join)
     len = log_sig_length(dimension, degree)
     log_sig_c, batch_shape, batch_size = _signature_like_buffer(log_sig_value, S, len, "log_sig")
-    displacement_c = _signature_buffer(displacement, S, dimension, batch_shape, batch_size, "displacement")
-    out = Matrix{S}(undef, len, batch_size)
+    displacement_c = _signature_buffer(displacement, S, dimension, batch_shape, batch_size, "displacement", log_sig_c)
+    out = _allocate(log_sig_c, len, batch_size)
 
     if batch_size != 0 && len != 0
         lock(_cache_lock) do
-            prepare_log_sig(dimension, degree, _modern_abi[] ? 3 : 2)
+            _prepare_log_sig_for(log_sig_c, dimension, degree, _modern_abi[] ? 3 : 2)
             _log_sig_join_c!(
                 out, log_sig_c, displacement_c, batch_size, dimension, degree, n_jobs,
             )
@@ -493,14 +498,14 @@ function _log_sig_join_backprop(
     S = _storage_eltype(T, :_log_sig_join_backprop)
     len = log_sig_length(dimension, degree)
     log_sig_c, batch_shape, batch_size = _signature_like_buffer(log_sig_value, S, len, "log_sig")
-    displacement_c = _signature_buffer(displacement, S, dimension, batch_shape, batch_size, "displacement")
-    derivs_c = _signature_buffer(derivs, S, len, batch_shape, batch_size, "derivs")
-    out_log_sig = Matrix{S}(undef, len, batch_size)
-    out_displacement = Matrix{S}(undef, dimension, batch_size)
+    displacement_c = _signature_buffer(displacement, S, dimension, batch_shape, batch_size, "displacement", log_sig_c)
+    derivs_c = _signature_buffer(derivs, S, len, batch_shape, batch_size, "derivs", log_sig_c)
+    out_log_sig = _allocate(log_sig_c, len, batch_size)
+    out_displacement = _allocate(log_sig_c, dimension, batch_size)
 
     if batch_size != 0 && len != 0
         lock(_cache_lock) do
-            prepare_log_sig(dimension, degree, _modern_abi[] ? 3 : 2)
+            _prepare_log_sig_for(log_sig_c, dimension, degree, _modern_abi[] ? 3 : 2)
             _log_sig_join_backprop_c!(
                 out_log_sig, out_displacement, derivs_c, log_sig_c, displacement_c,
                 batch_size, dimension, degree, n_jobs,

@@ -14,7 +14,7 @@ const _status_messages = (
 )
 
 function Base.showerror(io::IO, err::SigLibError)
-    print(io, "cpsig call ", err.function_name, " failed with status ", err.status)
+    print(io, "native call ", err.function_name, " failed with status ", err.status)
     if !isempty(err.detail)
         print(io, ": ", err.detail)
     elseif 1 <= err.status <= length(_status_messages)
