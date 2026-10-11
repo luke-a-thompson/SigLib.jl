@@ -64,3 +64,12 @@
     @test_throws ArgumentError logsig_to_sig(logsig64, 1, 3; method=3)
     @test_throws ArgumentError log_sig_join(logsig1, [1.0], 2, 2)
 end
+
+@testset "inverse log signature prepares its basis" begin
+    path = [0.0 0.0; 0.3 -0.2; -0.1 0.5]
+    for T in (Float32, Float64)
+        clear_log_sig_cache()
+        logarithm = log_sig(T.(path), 3)
+        @test logsig_to_sig(logarithm, 2, 3) ≈ sig(T.(path), 3)
+    end
+end

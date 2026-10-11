@@ -186,7 +186,7 @@ function logsig_to_sig(
     if batch_size != 0 && outlen != 0
         lock(_cache_lock) do
             _prepare_log_sig_if_needed(
-                dimension, degree, method;
+                dimension, degree, method == 1 ? 2 : method;
                 time_aug=time_aug, lead_lag=lead_lag,
             )
             _logsig_to_sig_c!(
@@ -330,7 +330,7 @@ function _logsig_to_sig_backprop(
     if batch_size != 0 && size(out, 1) != 0
         lock(_cache_lock) do
             _prepare_log_sig_if_needed(
-                dimension, degree, method;
+                dimension, degree, method == 1 ? 2 : method;
                 time_aug=time_aug, lead_lag=lead_lag,
             )
             _logsig_to_sig_backprop_c!(
