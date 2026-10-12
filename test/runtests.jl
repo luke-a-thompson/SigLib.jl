@@ -4,6 +4,7 @@ using Test
 include("c_api_tests.jl")
 include("signatures_tests.jl")
 include("log_signatures_tests.jl")
+include("bases_tests.jl")
 include("branched_signatures_tests.jl")
 include("branched_log_signatures_tests.jl")
 include("chainrules_tests.jl")

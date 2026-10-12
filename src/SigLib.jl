@@ -5,6 +5,7 @@ include("errors.jl")
 include("buffers.jl")
 include("c_api.jl")
 include("lengths.jl")
+include("bases.jl")
 include("cache.jl")
 include("signatures.jl")
 include("branched_signatures.jl")
@@ -23,5 +24,8 @@ export branched_sig, branched_sig_combine, branched_sig_length, branched_sig_to_
 export branched_log_sig, branched_log_sig_length, prepare_branched_sig, prepare_branched_log_sig
 export branched_signature, branched_signature_length
 export SigLibError, CPSigError
+export words, words_of_length, lyndon_words, lyndon_words_of_length, is_lyndon
+export word_to_idx, idx_to_word, lyndon_bracket, lyndon_brackets, log_sig_basis
+export trees, trees_of_order, rooted_trees, tree_to_idx, idx_to_tree, branched_log_sig_basis
 
 end

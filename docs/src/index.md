@@ -36,6 +36,56 @@ Load `ChainRulesCore` to enable reverse-mode rules for the numerical operations.
 
 In-memory caches prepare automatically. Use `set_cache_dir(directory)` before requesting persistent disk caches with `use_disk=true`; SigLib creates the parent directory. The legacy 3.1 binary uses a temporary directory for its in-memory cache bookkeeping. Upstream 4.x does not need that directory.
 
+## Words, trees, and log bases
+
+The enumeration utilities run in Julia and need no Python installation or native cache preparation. They follow [pySigLib's word utilities](https://github.com/daniil-shmelev/pySigLib/blob/main/pysiglib/words.py) and [tree utilities](https://github.com/daniil-shmelev/pySigLib/blob/main/pysiglib/trees.py). SigLib additionally exposes the standard Lyndon bracketings and the compressed MKW basis labels constructed internally by pySigLib.
+
+```julia
+words(dimension, degree)                         # includes the empty word ()
+words_of_length(dimension, length)
+lyndon_words(dimension, degree)                  # no empty word
+lyndon_words_of_length(dimension, length)
+is_lyndon(word)
+lyndon_bracket(word)
+lyndon_brackets(dimension, degree)
+word_to_idx(word, dimension; scalar_term=false)
+idx_to_word(index, dimension; scalar_term=false)
+trees(dimension, degree; planar=false)           # includes nothing for the scalar
+trees_of_order(dimension, order; planar=false)
+rooted_trees(dimension, degree; planar=false)    # individual trees, excludes empty
+tree_to_idx(tree, dimension, degree; planar=false, scalar_term=false)
+idx_to_tree(index, dimension, degree; planar=false, scalar_term=false)
+log_sig_basis(dimension, degree; method=1, scalar_term=false)
+branched_log_sig_basis(dimension, degree; planar=false, method=nothing, scalar_term=false)
+```
+
+**Channel labels are zero-based; coefficient indices are one-based Julia indices.** Thus `(0,)` labels the first channel, and `word_to_idx((0,), 2)` returns `1`. For time augmentation or lead-lag, pass the effective dimension used by the numerical output. Utilities return fresh vectors; changing a returned vector does not change later enumerations.
+
+Trees use nested tuples: a leaf is `(label,)`, and an internal node is `(child1, child2, ..., root_label)`. Nonplanar children appear in increasing native tree-ID order; use that order when passing a tree to `tree_to_idx`. With `planar=true`, `trees` enumerates ordered forests `(tree1, tree2, ...)`, matching MKW signature coordinates. `rooted_trees(...; planar=true)` enumerates individual planar rooted trees. The scalar label is `nothing` in both cases, and `tree_to_idx(nothing, ...; scalar_term=true)` returns `1`.
+
+```julia
+path = [0.0 0.0; 0.5 1.0; 1.0 -0.25]
+bs = branched_sig(path, 3)
+bs[tree_to_idx(((1,), 0), 2, 3)] # root 0, child 1; tensor word (1, 0)
+
+lyndon_words(2, 3)     # [(0,), (1,), (0, 1), (0, 0, 1), (0, 1, 1)]
+lyndon_bracket((0, 0, 1)) # (:bracket, 0, (:bracket, 0, 1))
+labels = log_sig_basis(2, 3; method=2)
+collect(zip(labels, log_sig(path, 3; method=2)))
+
+# Expanded BCK logs are indexed by trees.
+collect(zip(branched_log_sig_basis(2, 3), branched_log_sig(path, 3)))
+
+# Compressed MKW logs: numerical methods 1–3 require the 4.x artifact.
+mkw_labels = branched_log_sig_basis(2, 3; planar=true, method=2)
+```
+
+A bracket expression `(:bracket, left, right)` means the standard commutator `left * right - right * left`; integers are ordinary letter generators, and tree tuples are MKW generators. Products in these symbolic coordinate labels use word concatenation for ordinary logs and forest concatenation for MKW, matching the native coordinate projection. Ordinary `log_sig_basis` returns tensor words for method 0, Lyndon words for method 1, and bracket expressions for methods 2–3. Its default method is 1, matching `log_sig`; choose the same method for your labels and coefficients.
+
+`branched_log_sig_basis` follows the numerical branched-log defaults: method 0 for BCK and method 1 for MKW. Method 0 labels the expanded Hopf log with trees/forests; planar method 1 labels extracted coordinates with weighted Lyndon forests; methods 2–3 label the corresponding standard bracketings. Each planar rooted tree is a letter ordered by its native tree ID, with weight equal to its node count. The truncation bounds total node count. BCK logs retain one coordinate per nonplanar tree. Compressed basis enumeration works with either native version; computing compressed MKW coefficients requires 4.x.
+
+Enumeration materializes the requested basis, so memory grows with the number of words, trees, or forests. Tree enumerations and index maps are cached in Julia for reuse.
+
 ## CUDA
 
 Install CUDA.jl 5.x and pass `CuArray` inputs to the same functions. All currently implemented numerical operations and their ChainRules pullbacks run through native cuSIG; packing, results, and gradients stay on the GPU. Load ChainRulesCore when derivatives are needed.
