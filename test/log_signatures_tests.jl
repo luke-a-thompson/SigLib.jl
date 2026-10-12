@@ -73,3 +73,22 @@ end
         @test logsig_to_sig(logarithm, 2, 3) ≈ sig(T.(path), 3)
     end
 end
+
+@testset "strided BCH batches" begin
+    for T in (Float32, Float64)
+        paths = reshape(T.(sin.(1:120)), 4, 3, 5, 2)
+        windows = @view paths[1:2:4, 3:-1:1, 1:2:5, :]
+        logs = log_sig(windows, 3; method=2)
+        storage = reshape(cos.(1:120), 4, 3, 10)
+        other = @view storage[1:2:4, 3:-1:1, 1:2:10]
+        displacement = @view paths[1:2:4, 3:-1:1, 1, :]
+        combined = log_sig_combine(logs, other, 2, 3)
+        joined = log_sig_join(logs, displacement, 2, 3)
+        @test eltype(combined) === T
+        for i in 1:2, j in 1:3
+            @test logs[i, j, :] ≈ log_sig(windows[i, j, :, :], 3; method=2)
+            @test combined[i, j, :] ≈ log_sig_combine(logs[i, j, :], other[i, j, :], 2, 3)
+            @test joined[i, j, :] ≈ log_sig_join(logs[i, j, :], displacement[i, j, :], 2, 3)
+        end
+    end
+end

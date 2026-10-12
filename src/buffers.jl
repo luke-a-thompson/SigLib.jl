@@ -71,18 +71,18 @@ function _correction_buffer(correction, like, batch_shape, batch_size, dimension
 
     segments = len - 1
     return _with_array(like) do
-        A = _materialize(correction, eltype(like))
-        if ndims(A) == 1
-            return _CorrectionBuffer(A, UInt64(width), UInt64(0), UInt64(0))
-        elseif ndims(A) == 2 && size(A, 1) == segments
-            return _CorrectionBuffer(_permute(A, (2, 1)), UInt64(width), UInt64(0), UInt64(width))
+        if ndims(correction) == 1
+            return _CorrectionBuffer(_materialize(correction, eltype(like)), UInt64(width), UInt64(0), UInt64(0))
+        elseif ndims(correction) == 2 && size(correction, 1) == segments
+            packed = _permuted_buffer(correction, eltype(like), size(correction), (2, 1))
+            return _CorrectionBuffer(packed, UInt64(width), UInt64(0), UInt64(width))
         end
 
         expected = (batch_shape..., segments, width)
-        size(A) == expected || throw(ArgumentError(
-            "correction must have shape ($width,), ($segments, $width), or $expected, got $(size(A))",
+        size(correction) == expected || throw(ArgumentError(
+            "correction must have shape ($width,), ($segments, $width), or $expected, got $(size(correction))",
         ))
-        packed = _permute(reshape(A, batch_size, segments, width), (3, 2, 1))
+        packed = _permuted_buffer(correction, eltype(like), (batch_size, segments, width), (3, 2, 1))
         return _CorrectionBuffer(packed, UInt64(width), UInt64(Base.checked_mul(segments, width)), UInt64(width))
     end
 end
@@ -99,6 +99,13 @@ _materialize(x::AbstractArray, ::Type{T}) where {T} = x isa Array{T} ? x : Array
 
 # GPU permutation kernels need a nonempty launch grid.
 _permute(x, axes) = isempty(x) ? similar(x, map(i -> size(x, i), axes)) : permutedims(x, axes)
+
+# Pack views and convert precision directly into the native layout.
+function _permuted_buffer(x, ::Type{T}, dims, axes) where {T}
+    x isa Array{T} && return _permute(reshape(x, dims), axes)
+    out = Array{T}(undef, map(i -> dims[i], axes))
+    return permutedims!(out, reshape(x, dims), axes)
+end
 
 function _allocate(like::AbstractArray, dims::Integer...; zero::Bool=false)
     return _with_array(like) do
@@ -118,8 +125,7 @@ function _path_buffer(path::AbstractArray{T,N}, function_name::Symbol=:sig) wher
         N >= 2 || throw(ArgumentError("path must have at least rank 2"))
 
         S = _storage_eltype(T, function_name)
-        A = _materialize(path, S)
-        path_size = size(A)
+        path_size = size(path)
         len = path_size[end - 1]
         dimension = path_size[end]
         batch_shape = path_size[1:end - 2]
@@ -130,8 +136,8 @@ function _path_buffer(path::AbstractArray{T,N}, function_name::Symbol=:sig) wher
 
         # Public shape follows pySigLib: (batch..., length, dimension). The C ABI is
         # row-major [batch][length][dimension], equivalent to Julia (dimension, length, batch).
-        reshaped = reshape(A, batch_size, len, dimension)
-        return _permute(reshaped, (3, 2, 1)), batch_shape, batch_size, dimension, len
+        return _permuted_buffer(path, S, (batch_size, len, dimension), (3, 2, 1)),
+            batch_shape, batch_size, dimension, len
     end
 end
 
@@ -161,13 +167,11 @@ function _signature_buffer(
             throw(ArgumentError("$name must have shape $expected_size, got $(size(x))"))
 
         _check_backend(like, x)
-        A = _materialize(x, T)
         if isempty(batch_shape)
-            return reshape(A, siglen, batch_size)
+            return reshape(_materialize(x, T), siglen, batch_size)
         end
 
-        batch_first = reshape(A, batch_size, siglen)
-        return _permute(batch_first, (2, 1))
+        return _permuted_buffer(x, T, (batch_size, siglen), (2, 1))
     end
 end
 

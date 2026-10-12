@@ -11,6 +11,8 @@ _context(x::AnyCuArray) = _context(parent(x))
 SigLib._backend(::AnyCuArray) = :cuda
 SigLib._with_array(f, x::AnyCuArray) = CUDA.context!(f, _context(x))
 SigLib._materialize(x::AnyCuArray, ::Type{T}) where {T} = x isa CuArray{T} ? x : CuArray{T}(x)
+SigLib._permuted_buffer(x::AnyCuArray, ::Type{T}, dims, axes) where {T} =
+    SigLib._permute(reshape(SigLib._materialize(x, T), dims), axes)
 function SigLib._check_backend(like::AnyCuArray, x::AnyCuArray)
     _context(like) == _context(x) || throw(ArgumentError("all CUDA inputs must belong to the same context"))
     return nothing
