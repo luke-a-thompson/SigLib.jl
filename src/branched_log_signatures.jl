@@ -38,14 +38,19 @@ function branched_sig_to_log_sig(
     _as_cint_n_jobs(n_jobs)
     bsig_c, batch_shape, batch_size, d, scalar_term, outlen =
         _branched_log_sig_input(bsig, dimension, degree, time_aug, lead_lag, planar, m)
+    out = _branched_sig_to_log_sig_from_buffer(bsig_c, batch_size, d, degree, m, planar, scalar_term, outlen, n_jobs)
+    return _format_signature_output(out, batch_shape)
+end
+
+function _branched_sig_to_log_sig_from_buffer(bsig_c, batch_size, d, degree, method, planar, scalar_term, outlen, n_jobs)
     out = _allocate(bsig_c, outlen, batch_size)
     if batch_size != 0 && outlen != 0
         lock(_cache_lock) do
-            _prepare_branched_log_sig_for(bsig_c, d, degree, m; planar=planar)
-            _branched_sig_to_log_sig_c!(out, bsig_c, batch_size, d, degree, planar, scalar_term, n_jobs, m)
+            _prepare_branched_log_sig_for(bsig_c, d, degree, method; planar=planar)
+            _branched_sig_to_log_sig_c!(out, bsig_c, batch_size, d, degree, planar, scalar_term, n_jobs, method)
         end
     end
-    return _format_signature_output(out, batch_shape)
+    return out
 end
 
 """
@@ -59,14 +64,15 @@ function branched_log_sig(
     planar::Bool=false, scalar_term::Bool=false, method::Union{Nothing,Integer}=nothing,
     correction=nothing, n_jobs::Integer=1,
 ) where {T<:Real,N}
+    degree >= 0 || throw(ArgumentError("degree must be nonnegative"))
     m = _branched_log_sig_method(method, planar)
     _validate_branched_log_sig_degree(path, degree, m)
     _as_cint_n_jobs(n_jobs)
+    path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :branched_log_sig)
+    correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, degree, lead_lag)
+    d = _effective_dimension(dimension, time_aug, lead_lag)
     if m == 3
-        path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :branched_log_sig)
-        correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, degree, lead_lag)
         _validate_bch_correction(correction_c, :branched_log_sig)
-        d = _effective_dimension(dimension, time_aug, lead_lag)
         outlen = branched_log_sig_length(d, degree; planar=true)
         out = _allocate(path_c, outlen, batch_size)
         if batch_size != 0 && outlen != 0
@@ -79,11 +85,12 @@ function branched_log_sig(
         end
         return _format_signature_output(out, batch_shape)
     end
-    bsig = branched_sig(path, degree;
+    bsig_c = _branched_sig_from_buffer(path_c, batch_size, dimension, len, degree;
         time_aug=time_aug, lead_lag=lead_lag, end_time=end_time,
-        planar=planar, scalar_term=scalar_term, correction=correction, n_jobs=n_jobs)
-    return branched_sig_to_log_sig(bsig, size(path, N), degree;
-        time_aug=time_aug, lead_lag=lead_lag, planar=planar, method=m, n_jobs=n_jobs)
+        planar=planar, scalar_term=scalar_term, correction=correction_c, n_jobs=n_jobs)
+    outlen = m == 0 ? size(bsig_c, 1) : branched_log_sig_length(d, degree; planar=true)
+    out = _branched_sig_to_log_sig_from_buffer(bsig_c, batch_size, d, degree, m, planar, scalar_term, outlen, n_jobs)
+    return _format_signature_output(out, batch_shape)
 end
 
 function _branched_sig_to_log_sig_backprop(

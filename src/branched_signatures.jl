@@ -30,6 +30,17 @@ function branched_sig(
     _as_cint_n_jobs(n_jobs)
     path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :branched_sig)
     correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, max_nodes, lead_lag)
+    out = _branched_sig_from_buffer(path_c, batch_size, dimension, len, max_nodes;
+        time_aug=time_aug, lead_lag=lead_lag, end_time=end_time, planar=planar,
+        scalar_term=scalar_term, correction=correction_c, n_jobs=n_jobs)
+    return _format_signature_output(out, batch_shape)
+end
+
+function _branched_sig_from_buffer(
+    path_c::AbstractArray{T,3}, batch_size, dimension, len, max_nodes;
+    time_aug=false, lead_lag=false, end_time=1.0, planar=false, scalar_term=false,
+    correction::_CorrectionBuffer=_CorrectionBuffer(), n_jobs=1,
+) where {T<:Union{Float32,Float64}}
     siglen = branched_sig_length(
         dimension, max_nodes;
         time_aug=time_aug, lead_lag=lead_lag, planar=planar, scalar_term=scalar_term,
@@ -44,12 +55,12 @@ function branched_sig(
             )
             _branched_sig_c!(
                 out, path_c, batch_size, dimension, len, max_nodes,
-                time_aug, lead_lag, planar, scalar_term, n_jobs, end_time, correction_c,
+                time_aug, lead_lag, planar, scalar_term, n_jobs, end_time, correction,
             )
         end
     end
 
-    return _format_signature_output(out, batch_shape)
+    return out
 end
 
 """

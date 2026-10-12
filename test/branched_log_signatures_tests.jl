@@ -23,6 +23,25 @@
     @test_throws ArgumentError branched_sig_to_log_sig(bsig, 1, -1)
 end
 
+@testset "branched log pipeline on views" begin
+    for T in (Float32, Float64), planar in (false, true)
+        paths = reshape(T.(sin.(1:120)), 4, 3, 5, 2)
+        windows = @view paths[1:2:4, 3:-1:1, 1:2:5, :]
+        methods = planar && SigLib._modern_abi[] ? (0:2) : (0:0)
+        for method in methods, degree in (0, 2), scalar_term in (false, true),
+            time_aug in (false, true), lead_lag in (false, true)
+            options = (; planar, scalar_term, time_aug, lead_lag, end_time=0.7)
+            signature = branched_sig(windows, degree; options...)
+            expected = branched_sig_to_log_sig(signature, 2, degree;
+                planar, time_aug, lead_lag, method)
+            actual = branched_log_sig(windows, degree; options..., method)
+            @test actual ≈ expected
+            @test size(actual) == size(expected) && eltype(actual) === T
+        end
+    end
+    @test_throws ArgumentError branched_log_sig(zeros(3, 2), -1)
+end
+
 @testset "branched log Python conventions" begin
     path = [0.0 0.0; 0.2 -0.3; 0.7 0.4; 0.5 0.8]
     for planar in (false, true)

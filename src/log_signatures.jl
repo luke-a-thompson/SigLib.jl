@@ -41,10 +41,7 @@ function _signature_input_buffer(
     lead_lag::Bool=false,
 ) where {T<:Real,N,S<:Union{Float32,Float64}}
     siglen = sig_length(dimension, degree; time_aug=time_aug, lead_lag=lead_lag)
-    siglen_scalar = sig_length(
-        dimension, degree;
-        time_aug=time_aug, lead_lag=lead_lag, scalar_term=true,
-    )
+    siglen_scalar = siglen + 1
     N >= 1 || throw(ArgumentError("$name must have at least rank 1"))
     lastdim = size(x, N)
     if lastdim == siglen
