@@ -41,6 +41,6 @@
 
     @test_throws TypeError branched_sig(reshape([0, 1], 2, 1), 2)
     @test_throws ArgumentError branched_sig(path64, 2; n_jobs=0)
-    @test_throws ArgumentError branched_sig(path64, 2; correction=Float64[])
+    @test branched_sig(path64, 2; correction=Float64[]) ≈ branched_sig(path64, 2)
     @test_throws ArgumentError branched_sig(Array{Float64}(undef, 2, 0, 1), 2)
 end

@@ -184,6 +184,7 @@ function rrule(
     end_time::Real=1.0,
     method::Integer=1,
     scalar_term::Bool=false,
+    correction=nothing,
     n_jobs::Integer=1,
 ) where {T<:Union{Float32,Float64},N}
     SigLib._as_log_sig_method(method)
@@ -191,7 +192,7 @@ function rrule(
         sig_value, sig_pullback = rrule(
             SigLib.sig, path, degree;
             time_aug=time_aug, lead_lag=lead_lag, end_time=end_time,
-            scalar_term=method == 0 && scalar_term, n_jobs=n_jobs,
+            scalar_term=method == 0 && scalar_term, correction=correction, n_jobs=n_jobs,
         )
         y, convert_pullback = rrule(
             SigLib.sig_to_log_sig, sig_value, size(path, N), degree;
@@ -206,6 +207,7 @@ function rrule(
         end_time=end_time,
         method=method,
         scalar_term=scalar_term,
+        correction=correction,
         n_jobs=n_jobs,
     )
     project_path = ProjectTo(path)
@@ -350,7 +352,6 @@ function rrule(
     n_jobs::Integer=1,
 ) where {T<:Union{Float32,Float64},N}
     m = SigLib._branched_log_sig_method(method, planar)
-    correction isa AbstractArray && isempty(correction) && (correction = nothing)
     if m == 3
         y = SigLib.branched_log_sig(path, degree;
             time_aug=time_aug, lead_lag=lead_lag, end_time=end_time, planar=planar,

@@ -10,6 +10,10 @@ The public shape convention follows pySigLib:
 - a batch has shape `(batch..., length, dimension)`
 - the result has shape `(branched_signature_length,)` or
   `(batch..., branched_signature_length)`
+
+`correction` uses the tensor-level layouts described in [`sig`](@ref), with
+`degree = max_nodes`. Each word supplies a chain tree labeled from root to leaf
+in the local Hopf exponential. Corrections are constant during path differentiation.
 """
 function branched_sig(
     path::AbstractArray{T,N},
@@ -24,9 +28,8 @@ function branched_sig(
 ) where {T<:Real,N}
     max_nodes >= 0 || throw(ArgumentError("max_nodes must be nonnegative"))
     _as_cint_n_jobs(n_jobs)
-    _validate_standard_signature_options(correction, :branched_sig)
-
     path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :branched_sig)
+    correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, max_nodes, lead_lag)
     siglen = branched_sig_length(
         dimension, max_nodes;
         time_aug=time_aug, lead_lag=lead_lag, planar=planar, scalar_term=scalar_term,
@@ -41,7 +44,7 @@ function branched_sig(
             )
             _branched_sig_c!(
                 out, path_c, batch_size, dimension, len, max_nodes,
-                time_aug, lead_lag, planar, scalar_term, n_jobs, end_time,
+                time_aug, lead_lag, planar, scalar_term, n_jobs, end_time, correction_c,
             )
         end
     end
@@ -110,9 +113,8 @@ function _branched_sig_backprop(
 ) where {T<:Real,N}
     max_nodes >= 0 || throw(ArgumentError("max_nodes must be nonnegative"))
     _as_cint_n_jobs(n_jobs)
-    _validate_standard_signature_options(correction, :branched_sig)
-
     path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :branched_sig)
+    correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, max_nodes, lead_lag)
     S = eltype(path_c)
     siglen = branched_sig_length(
         dimension, max_nodes;
@@ -130,7 +132,7 @@ function _branched_sig_backprop(
             )
             _branched_sig_backprop_c!(
                 out_c, path_c, bsig_derivs_c, bsig_c, batch_size, dimension, len, max_nodes,
-                time_aug, lead_lag, planar, scalar_term, n_jobs, end_time,
+                time_aug, lead_lag, planar, scalar_term, n_jobs, end_time, correction_c,
             )
         end
     end

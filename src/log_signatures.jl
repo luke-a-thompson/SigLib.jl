@@ -204,9 +204,13 @@ end
 
 """
     log_sig(path, degree; time_aug=false, lead_lag=false, end_time=1.0,
-        method=1, scalar_term=false, n_jobs=1)
+        method=1, scalar_term=false, correction=nothing, n_jobs=1)
 
 Compute the log signature of one path or a batch of paths.
+
+`correction` accepts the layouts described in [`sig`](@ref). Use `method=0`
+to preserve the full tensor logarithm for non-Lie corrections such as the Ito
+lift. Non-empty corrections are unsupported with the direct BCH `method=3`.
 """
 function log_sig(
     path::AbstractArray{T,N},
@@ -216,14 +220,17 @@ function log_sig(
     end_time::Real=1.0,
     method::Integer=1,
     scalar_term::Bool=false,
+    correction=nothing,
     n_jobs::Integer=1,
 ) where {T<:Real,N}
     degree >= 0 || throw(ArgumentError("degree must be nonnegative"))
     _as_log_sig_method(method)
     _as_cint_n_jobs(n_jobs)
+    path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :log_sig)
+    correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, degree, lead_lag)
 
     if method == 3
-        path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :log_sig)
+        _validate_bch_correction(correction_c, :log_sig)
         outlen = log_sig_length(dimension, degree; time_aug=time_aug, lead_lag=lead_lag)
         out = _allocate(path_c, outlen, batch_size)
         if batch_size != 0 && outlen != 0
@@ -242,11 +249,10 @@ function log_sig(
     end
 
     sig_scalar_term = method == 0 ? scalar_term : false
-    path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :log_sig)
     sig_c = _sig_from_buffer(
         path_c, batch_size, dimension, len, degree;
         time_aug=time_aug, lead_lag=lead_lag, end_time=end_time,
-        scalar_term=sig_scalar_term, n_jobs=n_jobs,
+        scalar_term=sig_scalar_term, correction=correction_c, n_jobs=n_jobs,
     )
     outlen = _log_sig_output_length(dimension, degree, method, sig_scalar_term; time_aug=time_aug, lead_lag=lead_lag)
     out = _allocate(path_c, outlen, batch_size)

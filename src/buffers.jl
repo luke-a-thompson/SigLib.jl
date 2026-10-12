@@ -37,9 +37,58 @@ end
 
 _storage_eltype(::Type{T}) where {T<:Real} = _storage_eltype(T, :sig)
 
-function _validate_standard_signature_options(correction, function_name::Symbol=:sig)
-    correction === nothing ||
-        throw(ArgumentError("correction is not supported by SigLib.$function_name yet"))
+struct _CorrectionBuffer{A}
+    data::A
+    length::UInt64
+    batch_stride::UInt64
+    segment_stride::UInt64
+end
+
+_CorrectionBuffer() = _CorrectionBuffer(nothing, UInt64(0), UInt64(0), UInt64(0))
+
+function _correction_buffer(correction, like, batch_shape, batch_size, dimension, len, degree, lead_lag)
+    correction === nothing && return _CorrectionBuffer()
+    correction isa AbstractArray || throw(ArgumentError("correction must be an array or nothing"))
+    eltype(correction) === eltype(like) ||
+        throw(ArgumentError("correction and path must have the same eltype"))
+    _check_backend(like, correction)
+    isempty(correction) && return _CorrectionBuffer()
+    lead_lag && throw(ArgumentError("correction cannot be combined with lead_lag=true"))
+    ndims(correction) >= 1 || throw(ArgumentError("correction must have at least rank 1"))
+    degree >= 2 || throw(ArgumentError("correction must be empty when degree < 2"))
+
+    width = size(correction, ndims(correction))
+    # Accept only complete prefixes of tensor levels 2..degree. Stop before
+    # overflowing when a level is already wider than the supplied correction.
+    total, level_size = 0, dimension
+    for level in 2:degree
+        level_size > div(width - total, dimension) && break
+        level_size *= dimension
+        total += level_size
+        total == width && break
+    end
+    total == width || throw(ArgumentError("correction width must be d^2 + ... + d^m for 2 <= m <= degree"))
+
+    segments = len - 1
+    return _with_array(like) do
+        A = _materialize(correction, eltype(like))
+        if ndims(A) == 1
+            return _CorrectionBuffer(A, UInt64(width), UInt64(0), UInt64(0))
+        elseif ndims(A) == 2 && size(A, 1) == segments
+            return _CorrectionBuffer(_permute(A, (2, 1)), UInt64(width), UInt64(0), UInt64(width))
+        end
+
+        expected = (batch_shape..., segments, width)
+        size(A) == expected || throw(ArgumentError(
+            "correction must have shape ($width,), ($segments, $width), or $expected, got $(size(A))",
+        ))
+        packed = _permute(reshape(A, batch_size, segments, width), (3, 2, 1))
+        return _CorrectionBuffer(packed, UInt64(width), UInt64(Base.checked_mul(segments, width)), UInt64(width))
+    end
+end
+
+function _validate_bch_correction(correction::_CorrectionBuffer, function_name::Symbol)
+    correction.length == 0 || throw(ArgumentError("correction is not supported with $function_name method=3"))
     return nothing
 end
 

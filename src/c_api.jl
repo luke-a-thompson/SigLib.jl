@@ -15,6 +15,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         scalar_term::Bool,
         n_jobs::Integer,
         end_time::Real,
+        correction::_CorrectionBuffer=_CorrectionBuffer(),
     )
         status = ccall(
             _cpsig_symbol($symbol),
@@ -31,7 +32,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
             _as_uint64(len, "length"),
             _as_uint64(degree, "degree"),
             time_aug, lead_lag, $T(end_time), horner, scalar_term, _as_cint_n_jobs(n_jobs),
-            Ptr{$T}(C_NULL), UInt64(0), UInt64(0), UInt64(0),
+            correction.data === nothing ? Ptr{$T}(C_NULL) : correction.data,
+            correction.length, correction.batch_stride, correction.segment_stride,
         )
         check_status(status, $symbol)
         return out
@@ -390,6 +392,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         scalar_term::Bool,
         n_jobs::Integer,
         end_time::Real,
+        correction::_CorrectionBuffer=_CorrectionBuffer(),
     )
         status = ccall(
             _cpsig_symbol($symbol),
@@ -406,7 +409,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
             _as_uint64(len, "length"),
             _as_uint64(max_nodes, "max_nodes"),
             _as_cint_n_jobs(n_jobs), time_aug, lead_lag, $T(end_time), planar, scalar_term,
-            Ptr{$T}(C_NULL), UInt64(0), UInt64(0), UInt64(0),
+            correction.data === nothing ? Ptr{$T}(C_NULL) : correction.data,
+            correction.length, correction.batch_stride, correction.segment_stride,
         )
         check_status(status, $symbol)
         return out
@@ -507,6 +511,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         scalar_term::Bool,
         n_jobs::Integer,
         end_time::Real,
+        correction::_CorrectionBuffer=_CorrectionBuffer(),
     )
         status = ccall(
             _cpsig_symbol($symbol),
@@ -523,7 +528,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
             _as_uint64(len, "length"),
             _as_uint64(degree, "degree"),
             time_aug, lead_lag, $T(end_time), scalar_term, _as_cint_n_jobs(n_jobs),
-            Ptr{$T}(C_NULL), UInt64(0), UInt64(0), UInt64(0),
+            correction.data === nothing ? Ptr{$T}(C_NULL) : correction.data,
+            correction.length, correction.batch_stride, correction.segment_stride,
         )
         check_status(status, $symbol)
         return out
@@ -547,6 +553,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         scalar_term::Bool,
         n_jobs::Integer,
         end_time::Real,
+        correction::_CorrectionBuffer=_CorrectionBuffer(),
     )
         status = ccall(
             _cpsig_symbol($symbol),
@@ -563,7 +570,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
             _as_uint64(len, "length"),
             _as_uint64(max_nodes, "max_nodes"),
             _as_cint_n_jobs(n_jobs), time_aug, lead_lag, $T(end_time), planar, scalar_term,
-            Ptr{$T}(C_NULL), UInt64(0), UInt64(0), UInt64(0),
+            correction.data === nothing ? Ptr{$T}(C_NULL) : correction.data,
+            correction.length, correction.batch_stride, correction.segment_stride,
         )
         check_status(status, $symbol)
         return out

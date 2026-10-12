@@ -6,31 +6,49 @@ The implemented API covers standard and branched signatures, log signatures, con
 
 ```julia
 sig_length(dimension, degree; scalar_term=false)
-sig(path, degree; scalar_term=false, n_jobs=1)
+sig(path, degree; scalar_term=false, correction=nothing, n_jobs=1)
 log_sig_length(dimension, degree; time_aug=false, lead_lag=false)
 prepare_log_sig(dimension, degree, method; time_aug=false, lead_lag=false)
 set_cache_dir(directory)
 clear_log_sig_cache(; use_disk=false)
 sig_to_log_sig(sig, dimension, degree; time_aug=false, lead_lag=false, method=1, n_jobs=1)
 logsig_to_sig(log_sig, dimension, degree; time_aug=false, lead_lag=false, method=1, scalar_term=false, n_jobs=1)
-log_sig(path, degree; time_aug=false, lead_lag=false, end_time=1.0, method=1, scalar_term=false, n_jobs=1)
+log_sig(path, degree; time_aug=false, lead_lag=false, end_time=1.0, method=1, scalar_term=false, correction=nothing, n_jobs=1)
 log_sig_combine(log_sig1, log_sig2, dimension, degree; n_jobs=1)
 log_sig_join(log_sig, displacement, dimension, degree; n_jobs=1)
 branched_sig_length(dimension, max_nodes; planar=false, scalar_term=false)
 prepare_branched_sig(dimension, max_nodes; planar=false)
 branched_log_sig_length(dimension, degree; planar=false)
 prepare_branched_log_sig(dimension, degree, method; planar=false)
-branched_sig(path, max_nodes; planar=false, scalar_term=false, n_jobs=1)
+branched_sig(path, max_nodes; planar=false, scalar_term=false, correction=nothing, n_jobs=1)
 branched_sig_combine(bsig1, bsig2, dimension, max_nodes; planar=false)
 branched_sig_to_log_sig(bsig, dimension, degree; planar=false, method=nothing, n_jobs=1)
-branched_log_sig(path, degree; planar=false, scalar_term=false, method=nothing, n_jobs=1)
+branched_log_sig(path, degree; planar=false, scalar_term=false, method=nothing, correction=nothing, n_jobs=1)
 ```
 
-Paths use pySigLib's shape convention: `(length, dimension)` for one path and `(batch..., length, dimension)` for batches. Outputs have shape `(coefficients,)` or `(batch..., coefficients)`. Inputs must contain `Float32` or `Float64`; views are accepted. Binary operations convert the second input to the first input's precision. Degree zero and empty batches are supported, but a path must have at least one point and one channel. The scalar signature term is excluded by default. `correction` is currently unsupported.
+Paths use pySigLib's shape convention: `(length, dimension)` for one path and `(batch..., length, dimension)` for batches. Outputs have shape `(coefficients,)` or `(batch..., coefficients)`. Inputs must contain `Float32` or `Float64`; views are accepted. Binary operations convert the second input to the first input's precision. Degree zero and empty batches are supported, but a path must have at least one point and one channel. The scalar signature term is excluded by default.
+
+`sig`, `log_sig`, `branched_sig`, and `branched_log_sig` accept `correction=nothing`, following [pySigLib's correction API](https://github.com/daniil-shmelev/pySigLib/blob/main/pysiglib/sig.py). Corrections are added to each local path increment before taking its exponential, and the segment signatures are composed along the path. Supply a vector `(C,)` for a constant correction, a matrix `(length - 1, C)` for per-segment corrections shared across the batch, or an array `(batch..., length - 1, C)` for batch-specific corrections. The width must be `C = d^2 + d^3 + ... + d^m`, where `d` is the original path dimension and `2 <= m <= degree` (or `max_nodes`); missing higher levels are zero. Levels are concatenated in increasing order, with words in lexicographic order and the last index varying fastest. Branched corrections use the corresponding root-to-leaf chain trees.
+
+Corrections must have the same eltype, backend, and CUDA context as the path; views are accepted. `nothing` and empty arrays mean no correction. A time channel added by `time_aug=true` receives no correction entries. Non-empty corrections cannot be combined with `lead_lag=true` or direct BCH `method=3`. For non-Lie corrections, use log-signature `method=0` to retain the full tensor or Hopf logarithm. ChainRules returns path gradients with corrections held constant.
+
+Native cpSIG 3.1 and 4.0 have a nonplanar branched-signature discrepancy at degree 3: supplying a non-empty all-zero correction changes some branching-tree coefficients compared with omitting the correction. SigLib forwards the native results, matching pySigLib; regression tests record this discrepancy. Ordinary tensor signatures pass the zero-correction identity and an independent tensor-series reference.
+
+For example, the Ito lift for a 2D Brownian path with identity covariance uses the local level-2 correction `-0.5 * dt * I`, flattened in lexicographic order:
+
+```julia
+path = [0.0 0.0; 0.1 -0.2; 0.05 0.3]
+dt = 0.5
+correction = [-0.5dt, 0.0, 0.0, -0.5dt] # constant on every segment
+s = sig(path, 3; correction=correction)
+l = log_sig(path, 3; correction=correction, method=0)
+rows = repeat(reshape(correction, 1, :), size(path, 1) - 1, 1)
+sig(path, 3; correction=rows) # same correction supplied per segment
+```
 
 For ordinary log signatures, method 0 returns tensor logarithms, method 1 extracts Lyndon-word coordinates, method 2 returns Lyndon-basis coordinates, and method 3 computes Lyndon-basis coordinates directly through BCH. Combine/join expect method-2 or method-3 coordinates. Methods 1–3 use compressed outputs and ignore `scalar_term`.
 
-Branched log signatures follow Python's defaults: method 0 for nonplanar paths and method 1 for planar paths. Method 0 returns the expanded Hopf logarithm; planar methods 1 and 2 return extracted weighted Lyndon coordinates and MKW basis coordinates, respectively. Method 3 computes the same coordinates as method 2 directly through BCH. Conversion from a branched signature supports methods 0–2 and infers the scalar term from the input length; method 0 preserves that format, while compressed outputs are scalar-free. `branched_log_sig_length` returns the nonplanar tree count or the compressed planar length. Methods 1–3 require a 4.x native artifact; with the 3.1 bootstrap, use `planar=true, method=0` for expanded planar logs. Non-empty corrections remain unsupported; empty corrections are accepted by `branched_log_sig`.
+Branched log signatures follow Python's defaults: method 0 for nonplanar paths and method 1 for planar paths. Method 0 returns the expanded Hopf logarithm; planar methods 1 and 2 return extracted weighted Lyndon coordinates and MKW basis coordinates, respectively. Method 3 computes the same coordinates as method 2 directly through BCH. Conversion from a branched signature supports methods 0–2 and infers the scalar term from the input length; method 0 preserves that format, while compressed outputs are scalar-free. `branched_log_sig_length` returns the nonplanar tree count or the compressed planar length. Methods 1–3 require a 4.x native artifact; with the 3.1 bootstrap, use `planar=true, method=0` for expanded planar logs.
 
 Load `ChainRulesCore` to enable reverse-mode rules for the numerical operations. Composed log-signature rules reuse the forward signature. `n_jobs=1` runs native computations serially; `-1` requests all available native threads. Cache-dependent operations are synchronized across Julia tasks, including preparation, clearing, and pullbacks. The native operation can still use multiple threads internally. Cache lifetime is shared within the process; external calls into the same library must obey the same synchronization rules.
 
@@ -121,4 +139,4 @@ Upstream CPU artifacts cover Linux/Windows x86-64 and macOS arm64. Their minimum
 
 `library.jl` owns loading, `c_api.jl` owns concrete float/double ABI calls, `buffers.jl` owns validation and array layout, and the numerical files own public operations. Add native bindings using the existing typed loop pattern, use the shared buffers, and hold `_cache_lock` across preparation and native cache use. Add CUDA bindings in `ext/cuda/c_api.jl` and derivatives in the optional ChainRules extension. Test algebraic identities, batch/view equivalence, both precisions, and finite-difference pullbacks where applicable.
 
-Full pySigLib coverage still requires ordinary signature combine/join, branched joins and straight-line operations, coefficient and prefix operations, signature kernels and metrics, streaming, corrections, and word/tree utilities. These can extend the existing layers.
+Full pySigLib coverage still requires ordinary signature combine/join, branched joins and straight-line operations, coefficient and prefix operations, signature kernels and metrics, and streaming. These can extend the existing layers.

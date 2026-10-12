@@ -51,7 +51,7 @@ end
 """
     branched_log_sig(path, degree; time_aug=false, lead_lag=false, end_time=1.0, planar=false, scalar_term=false, method=nothing, correction=nothing, n_jobs=1)
 
-Compute branched log signatures, defaulting to method 1 for planar paths and method 0 otherwise. Methods 1–3 require `planar=true` and ignore `scalar_term`; method 3 computes MKW basis coordinates directly through BCH. Non-empty corrections are currently unsupported.
+Compute branched log signatures, defaulting to method 1 for planar paths and method 0 otherwise. Methods 1–3 require `planar=true` and ignore `scalar_term`; method 3 computes MKW basis coordinates directly through BCH. `correction` accepts the layouts described in [`branched_sig`](@ref). Use method 0 to retain the full Hopf logarithm for non-Lie corrections. Method 3 accepts only absent or empty corrections.
 """
 function branched_log_sig(
     path::AbstractArray{T,N}, degree::Integer;
@@ -62,10 +62,10 @@ function branched_log_sig(
     m = _branched_log_sig_method(method, planar)
     _validate_branched_log_sig_degree(path, degree, m)
     _as_cint_n_jobs(n_jobs)
-    correction isa AbstractArray && isempty(correction) && (correction = nothing)
-    _validate_standard_signature_options(correction, :branched_log_sig)
     if m == 3
         path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :branched_log_sig)
+        correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, degree, lead_lag)
+        _validate_bch_correction(correction_c, :branched_log_sig)
         d = _effective_dimension(dimension, time_aug, lead_lag)
         outlen = branched_log_sig_length(d, degree; planar=true)
         out = _allocate(path_c, outlen, batch_size)
@@ -81,7 +81,7 @@ function branched_log_sig(
     end
     bsig = branched_sig(path, degree;
         time_aug=time_aug, lead_lag=lead_lag, end_time=end_time,
-        planar=planar, scalar_term=scalar_term, n_jobs=n_jobs)
+        planar=planar, scalar_term=scalar_term, correction=correction, n_jobs=n_jobs)
     return branched_sig_to_log_sig(bsig, size(path, N), degree;
         time_aug=time_aug, lead_lag=lead_lag, planar=planar, method=m, n_jobs=n_jobs)
 end

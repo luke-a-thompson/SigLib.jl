@@ -29,6 +29,6 @@
 
     @test_throws TypeError sig(reshape([0, 1], 2, 1), 2)
     @test_throws ArgumentError sig(path64, 2; n_jobs=0)
-    @test_throws ArgumentError sig(path64, 2; correction=Float64[])
+    @test sig(path64, 2; correction=Float64[]) ≈ sig(path64, 2)
     @test_throws ArgumentError sig(Array{Float64}(undef, 2, 0, 1), 2)
 end

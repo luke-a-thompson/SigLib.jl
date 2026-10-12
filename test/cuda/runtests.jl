@@ -6,7 +6,8 @@ CUDA.allowscalar(false)
 
 function parity(f, args...; gpu_args=map(x -> x isa AbstractArray ? CuArray(x) : x, args), kwargs...)
     cpu, cpu_pullback = rrule(f, args...; kwargs...)
-    gpu, gpu_pullback = rrule(f, gpu_args...; kwargs...)
+    gpu_options = (; (key => (value isa AbstractArray ? CuArray(value) : value) for (key, value) in pairs(kwargs))...)
+    gpu, gpu_pullback = rrule(f, gpu_args...; gpu_options...)
     T = eltype(cpu)
     atol, rtol = T == Float32 ? (2e-5, 2e-4) : (2e-11, 2e-10)
     @test gpu isa CuArray
@@ -60,6 +61,40 @@ end
         parity(log_sig_combine, l, l, 2, 3)
         parity(log_sig_join, l, displacement, 2, 3)
     end
+end
+
+@testset "CUDA correction forward and pullback parity" begin
+    for T in (Float32, Float64), time_aug in (false, true), scalar_term in (false, true)
+        path = reshape(T.(sin.(1:48) ./ 4), 2, 3, 4, 2)
+        constant = T.(cos.(1:12) ./ 20)
+        shared = reshape(T.(sin.(1:36) ./ 20), 3, 12)
+        specific = reshape(T.(cos.(1:216) ./ 20), 2, 3, 3, 12)
+        for correction in (constant, shared, specific)
+            options = (; correction, time_aug, scalar_term, end_time=0.7)
+            parity(sig, path, 3; options...)
+            parity(sig, path, 3; options..., horner=false)
+            for method in 0:2
+                parity(log_sig, path, 3; options..., method)
+            end
+            for planar in (false, true)
+                parity(branched_sig, path, 3; options..., planar)
+                for method in (planar ? (0:2) : (0:0))
+                    parity(branched_log_sig, path, 3; options..., planar, method)
+                end
+            end
+        end
+    end
+    path = [0.0 0.0; 0.3 -0.2; -0.1 0.5]
+    gpu = CuArray(path)
+    rows = reshape(sin.(1:16) ./ 20, 2, 8)
+    correction = CuArray(rows)
+    @test Array(sig(gpu, 3; correction=@view(correction[:, 1:2:8]))) ≈
+        sig(path, 3; correction=@view(rows[:, 1:2:8]))
+    @test_throws ArgumentError sig(gpu, 3; correction=ones(4))
+    @test_throws ArgumentError sig(path, 3; correction=CuArray(ones(4)))
+    @test_throws ArgumentError sig(gpu, 3; correction=CuArray(ones(4)), lead_lag=true)
+    @test_throws ArgumentError log_sig(gpu, 3; correction=CuArray(ones(4)), method=3)
+    @test_throws ArgumentError branched_log_sig(gpu, 3; correction=CuArray(ones(4)), planar=true, method=3)
 end
 
 @testset "CUDA buffers, boundaries and cache lifecycle" begin
