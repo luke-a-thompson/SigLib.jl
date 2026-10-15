@@ -195,7 +195,7 @@ function rrule(
             scalar_term=method == 0 && scalar_term, correction=correction, n_jobs=n_jobs,
         )
         y, convert_pullback = rrule(
-            SigLib.sig_to_log_sig, sig_value, size(path, N), degree;
+            SigLib.sig_to_log_sig, sig_value, size(path, 1), degree;
             time_aug=time_aug, lead_lag=lead_lag, method=method, n_jobs=n_jobs,
         )
         return y, ybar -> sig_pullback(convert_pullback(ybar)[2])
@@ -376,7 +376,7 @@ function rrule(
         correction=correction,
         n_jobs=n_jobs,
     )
-    dimension = size(path, N)
+    dimension = size(path, 1)
     y, convert_pullback = rrule(SigLib.branched_sig_to_log_sig,
         bsig, dimension, degree;
         time_aug=time_aug,

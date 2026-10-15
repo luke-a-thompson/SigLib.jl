@@ -26,9 +26,11 @@ branched_sig_to_log_sig(bsig, dimension, degree; planar=false, method=nothing, n
 branched_log_sig(path, degree; planar=false, scalar_term=false, method=nothing, correction=nothing, n_jobs=1)
 ```
 
-Paths use pySigLib's shape convention: `(length, dimension)` for one path and `(batch..., length, dimension)` for batches. Outputs have shape `(coefficients,)` or `(batch..., coefficients)`. Inputs must contain `Float32` or `Float64`; views are accepted. Binary operations convert the second input to the first input's precision. Degree zero and empty batches are supported, but a path must have at least one point and one channel. The scalar signature term is excluded by default.
+Paths use `(dimension, length)` for one path and `(dimension, length, batch...)` for batches. Outputs have shape `(coefficients,)` or `(coefficients, batch...)`. Channels and coefficients come first; batch dimensions come last. This convention applies to CPU and CUDA arrays, conversions, composition operations, displacements, and gradients. Dense inputs go directly to the native library, and outputs share native storage without layout conversions. Inputs must contain `Float32` or `Float64`; views are accepted. Binary operations convert the second input to the first input's precision. Degree zero and empty batches are supported, but a path must have at least one point and one channel. The scalar signature term is excluded by default.
 
-`sig`, `log_sig`, `branched_sig`, and `branched_log_sig` accept `correction=nothing`, following [pySigLib's correction API](https://github.com/daniil-shmelev/pySigLib/blob/main/pysiglib/sig.py). Corrections are added to each local path increment before taking its exponential, and the segment signatures are composed along the path. Supply a vector `(C,)` for a constant correction, a matrix `(length - 1, C)` for per-segment corrections shared across the batch, or an array `(batch..., length - 1, C)` for batch-specific corrections. The width must be `C = d^2 + d^3 + ... + d^m`, where `d` is the original path dimension and `2 <= m <= degree` (or `max_nodes`); missing higher levels are zero. Levels are concatenated in increasing order, with words in lexicographic order and the last index varying fastest. Branched corrections use the corresponding root-to-leaf chain trees.
+This changes the earlier Python-style axis order. To migrate existing paths or corrections while preserving the order of multiple batch dimensions, use `permutedims(x, (ndims(x), ndims(x) - 1, (1:ndims(x)-2)...))`. For batched coefficients or displacements, use `permutedims(x, (ndims(x), (1:ndims(x)-1)...))`; constant vectors need no change. New code should create arrays in the documented order directly.
+
+`sig`, `log_sig`, `branched_sig`, and `branched_log_sig` accept `correction=nothing`, following [pySigLib's correction API](https://github.com/daniil-shmelev/pySigLib/blob/main/pysiglib/sig.py). Corrections are added to each local path increment before taking its exponential, and the segment signatures are composed along the path. Supply a vector `(C,)` for a constant correction, a matrix `(C, length - 1)` for per-segment corrections shared across the batch, or an array `(C, length - 1, batch...)` for batch-specific corrections. The width must be `C = d^2 + d^3 + ... + d^m`, where `d` is the original path dimension and `2 <= m <= degree` (or `max_nodes`); missing higher levels are zero. Levels are concatenated in increasing order, with words in lexicographic order and the last index varying fastest. Branched corrections use the corresponding root-to-leaf chain trees.
 
 Corrections must have the same eltype, backend, and CUDA context as the path; views are accepted. `nothing` and empty arrays mean no correction. A time channel added by `time_aug=true` receives no correction entries. Non-empty corrections cannot be combined with `lead_lag=true` or direct BCH `method=3`. For non-Lie corrections, use log-signature `method=0` to retain the full tensor or Hopf logarithm. ChainRules returns path gradients with corrections held constant.
 
@@ -37,12 +39,12 @@ Native cpSIG 3.1 and 4.0 have a nonplanar branched-signature discrepancy at degr
 For example, the Ito lift for a 2D Brownian path with identity covariance uses the local level-2 correction `-0.5 * dt * I`, flattened in lexicographic order:
 
 ```julia
-path = [0.0 0.0; 0.1 -0.2; 0.05 0.3]
+path = [0.0 0.1 0.05; 0.0 -0.2 0.3]
 dt = 0.5
 correction = [-0.5dt, 0.0, 0.0, -0.5dt] # constant on every segment
 s = sig(path, 3; correction=correction)
 l = log_sig(path, 3; correction=correction, method=0)
-rows = repeat(reshape(correction, 1, :), size(path, 1) - 1, 1)
+rows = repeat(reshape(correction, :, 1), 1, size(path, 2) - 1)
 sig(path, 3; correction=rows) # same correction supplied per segment
 ```
 
@@ -82,7 +84,7 @@ branched_log_sig_basis(dimension, degree; planar=false, method=nothing, scalar_t
 Trees use nested tuples: a leaf is `(label,)`, and an internal node is `(child1, child2, ..., root_label)`. Nonplanar children appear in increasing native tree-ID order; use that order when passing a tree to `tree_to_idx`. With `planar=true`, `trees` enumerates ordered forests `(tree1, tree2, ...)`, matching MKW signature coordinates. `rooted_trees(...; planar=true)` enumerates individual planar rooted trees. The scalar label is `nothing` in both cases, and `tree_to_idx(nothing, ...; scalar_term=true)` returns `1`.
 
 ```julia
-path = [0.0 0.0; 0.5 1.0; 1.0 -0.25]
+path = [0.0 0.5 1.0; 0.0 1.0 -0.25]
 bs = branched_sig(path, 3)
 bs[tree_to_idx(((1,), 0), 2, 3)] # root 0, child 1; tensor word (1, 0)
 
@@ -106,17 +108,19 @@ Enumeration materializes the requested basis, so memory grows with the number of
 
 ## CUDA
 
-Install CUDA.jl 5.x and pass `CuArray` inputs to the same functions. All currently implemented numerical operations and their ChainRules pullbacks run through native cuSIG; packing, results, and gradients stay on the GPU. Load ChainRulesCore when derivatives are needed.
+Install CUDA.jl 5.x and pass `CuArray` inputs to the numerical functions. The allocating functions and their ChainRules pullbacks run through native cuSIG; results and gradients stay on the GPU. Load ChainRulesCore when derivatives are needed.
 
 ```julia
 using SigLib, CUDA, ChainRulesCore
-path = CuArray([0.0 0.0; 0.5 1.0; 1.0 -0.25])
+path = CuArray([0.0 0.5 1.0; 0.0 1.0 -0.25])
 sig(path, 3)                              # CuVector
 branched_log_sig(path, 3; planar=true)     # CuVector
+batch = CUDA.randn(Float32, 3, 32, 4)     # 4 paths, 32 points, 3 channels
+log_sig(batch, 5)                         # CuMatrix: (coefficients, 4)
 clear_log_sig_cache(; device=:cuda)
 ```
 
-Multiple inputs must use the same backend and CUDA context; views are packed on the GPU. Calls activate the input's context and synchronize the device before and after native work because cuSIG manages its own streams and accepts no caller stream. Native calls are synchronous. `n_jobs` controls CPU calls and has no effect on CUDA calls. Upstream limits direct planar branched BCH (method 3) to degree 20 on CUDA.
+Multiple inputs must use the same backend and CUDA context; noncontiguous views are materialized on the GPU; dense inputs and outputs need no layout copies. Calls activate the input's context and synchronize the device before and after native work because cuSIG manages its own streams and accepts no caller stream. Native calls are synchronous. `n_jobs` controls CPU calls and has no effect on CUDA calls. Upstream limits direct planar branched BCH (method 3) to degree 20 on CUDA.
 
 Cache preparation is automatic on the input device. Explicit cache controls accept `device=:cpu` (default), `:cuda`, or `:both`; CUDA preparation uses the active device; clearing affects native caches across devices. CUDA is optional for CPU users, and loading CUDA.jl alone does not load the cuSIG artifact. GPU support requires the upstream 4.x release manifest described below; the legacy bootstrap supports CPU calls.
 

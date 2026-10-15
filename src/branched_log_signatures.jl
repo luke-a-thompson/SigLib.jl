@@ -16,7 +16,7 @@ function _branched_log_sig_input(bsig::AbstractArray{T,N}, dimension, degree, ti
     d = _branched_log_sig_dimension(dimension, time_aug, lead_lag)
     _as_uint64(degree, "degree")
     len = d == 0 ? 0 : branched_sig_length(d, degree; planar=planar)
-    scalar_term = size(bsig, N) == len + 1
+    scalar_term = size(bsig, 1) == len + 1
     siglen = len + scalar_term
     S = _storage_eltype(T, :branched_sig_to_log_sig)
     bsig_c, batch_shape, batch_size = _signature_like_buffer(bsig, S, siglen, "bsig")

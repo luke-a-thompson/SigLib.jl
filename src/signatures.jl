@@ -4,16 +4,16 @@
 
 Compute the truncated signature of one path or a batch of paths.
 
-The public shape convention follows pySigLib:
+The public shape convention uses channels first and batch dimensions last:
 
-- a single path has shape `(length, dimension)`
-- a batch has shape `(batch..., length, dimension)`
-- the result has shape `(signature_length,)` or `(batch..., signature_length)`
+- a single path has shape `(dimension, length)`
+- a batch has shape `(dimension, length, batch...)`
+- the result has shape `(signature_length,)` or `(signature_length, batch...)`
 
 `correction` adds tensor levels 2 through `m <= degree` to each local path
 increment before exponentiation. It accepts a constant vector `(C,)`, shared
-per-segment rows `(length - 1, C)`, or batch-specific rows
-`(batch..., length - 1, C)`, where `C = d^2 + ... + d^m` and `d` is the original
+per-segment rows `(C, length - 1)`, or batch-specific rows
+`(C, length - 1, batch...)`, where `C = d^2 + ... + d^m` and `d` is the original
 path dimension. Levels are concatenated in lexicographic word order (last index
 varies fastest). Missing higher levels are zero; `nothing` or an empty array
 means no correction. The correction must use the path's eltype and backend.

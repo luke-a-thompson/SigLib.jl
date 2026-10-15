@@ -10,7 +10,7 @@
     @test_throws ArgumentError log_sig_length(2, -1)
     @test_throws ArgumentError prepare_log_sig(2, 2, 4)
 
-    path64 = reshape(Float64[0, 1], 2, 1)
+    path64 = reshape(Float64[0, 1], 1, 2)
     @test isapprox(log_sig(path64, 3; method=0), Float64[1, 0, 0]; atol=1e-14)
     @test isapprox(
         log_sig(path64, 3; method=0, scalar_term=true),
@@ -21,7 +21,7 @@
     @test log_sig(path64, 3; method=2) ≈ Float64[1]
     @test log_sig(path64, 3; method=3) ≈ Float64[1]
 
-    path32 = reshape(Float32[0, 1], 2, 1)
+    path32 = reshape(Float32[0, 1], 1, 2)
     logsig32 = log_sig(path32, 2; method=2)
     @test eltype(logsig32) === Float32
     @test logsig32 ≈ Float32[1]
@@ -39,17 +39,17 @@
     )
     @test logsig_to_sig(logsig64_scalar, 1, 3; method=0) ≈ sig64_scalar
 
-    path2 = [0.0 0.0; 0.5 1.0; 1.0 -0.25]
+    path2 = [0.0 0.5 1.0; 0.0 1.0 -0.25]
     @test log_sig(path2, 2; method=2) ≈ Float64[1, -0.25, -0.5625]
     @test log_sig(path2, 2; method=3) ≈ log_sig(path2, 2; method=2)
     @test log_sig(path64, 2; time_aug=true, method=3) ≈ Float64[1, 1, 0]
 
-    paths = Array{Float64}(undef, 2, 2, 1)
+    paths = Array{Float64}(undef, 1, 2, 2)
     paths[1, :, 1] .= [0.0, 1.0]
-    paths[2, :, 1] .= [0.0, 2.0]
+    paths[1, :, 2] .= [0.0, 2.0]
     logsigs = log_sig(paths, 2; method=2)
-    @test size(logsigs) == (2, 1)
-    @test logsigs[:, 1] ≈ [1, 2]
+    @test size(logsigs) == (1, 2)
+    @test logsigs[1, :] ≈ [1, 2]
 
     joined = log_sig_join(log_sig(path64, 3; method=2), [1.0], 1, 3)
     @test joined ≈ Float64[2]
@@ -58,7 +58,7 @@
 
     logsig1 = log_sig(path2, 2; method=2)
 
-    @test_throws TypeError log_sig(reshape([0, 1], 2, 1), 2)
+    @test_throws TypeError log_sig(reshape([0, 1], 1, 2), 2)
     @test_throws ArgumentError log_sig(path64, 2; method=4)
     @test_throws ArgumentError sig_to_log_sig(sig64, 1, 3; method=3)
     @test_throws ArgumentError logsig_to_sig(logsig64, 1, 3; method=3)
@@ -66,7 +66,7 @@
 end
 
 @testset "inverse log signature prepares its basis" begin
-    path = [0.0 0.0; 0.3 -0.2; -0.1 0.5]
+    path = [0.0 0.3 -0.1; 0.0 -0.2 0.5]
     for T in (Float32, Float64)
         clear_log_sig_cache()
         logarithm = log_sig(T.(path), 3)
@@ -76,19 +76,19 @@ end
 
 @testset "strided BCH batches" begin
     for T in (Float32, Float64)
-        paths = reshape(T.(sin.(1:120)), 4, 3, 5, 2)
-        windows = @view paths[1:2:4, 3:-1:1, 1:2:5, :]
+        paths = reshape(T.(sin.(1:120)), 2, 5, 3, 4)
+        windows = @view paths[:, 1:2:5, 3:-1:1, 1:2:4]
         logs = log_sig(windows, 3; method=2)
-        storage = reshape(cos.(1:120), 4, 3, 10)
-        other = @view storage[1:2:4, 3:-1:1, 1:2:10]
-        displacement = @view paths[1:2:4, 3:-1:1, 1, :]
+        storage = reshape(cos.(1:120), 10, 3, 4)
+        other = @view storage[1:2:10, 3:-1:1, 1:2:4]
+        displacement = @view paths[:, 1, 3:-1:1, 1:2:4]
         combined = log_sig_combine(logs, other, 2, 3)
         joined = log_sig_join(logs, displacement, 2, 3)
         @test eltype(combined) === T
         for i in 1:2, j in 1:3
-            @test logs[i, j, :] ≈ log_sig(windows[i, j, :, :], 3; method=2)
-            @test combined[i, j, :] ≈ log_sig_combine(logs[i, j, :], other[i, j, :], 2, 3)
-            @test joined[i, j, :] ≈ log_sig_join(logs[i, j, :], displacement[i, j, :], 2, 3)
+            @test logs[:, j, i] ≈ log_sig(windows[:, :, j, i], 3; method=2)
+            @test combined[:, j, i] ≈ log_sig_combine(logs[:, j, i], other[:, j, i], 2, 3)
+            @test joined[:, j, i] ≈ log_sig_join(logs[:, j, i], displacement[:, j, i], 2, 3)
         end
     end
 end

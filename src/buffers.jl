@@ -57,7 +57,7 @@ function _correction_buffer(correction, like, batch_shape, batch_size, dimension
     ndims(correction) >= 1 || throw(ArgumentError("correction must have at least rank 1"))
     degree >= 2 || throw(ArgumentError("correction must be empty when degree < 2"))
 
-    width = size(correction, ndims(correction))
+    width = size(correction, 1)
     # Accept only complete prefixes of tensor levels 2..degree. Stop before
     # overflowing when a level is already wider than the supplied correction.
     total, level_size = 0, dimension
@@ -73,16 +73,16 @@ function _correction_buffer(correction, like, batch_shape, batch_size, dimension
     return _with_array(like) do
         if ndims(correction) == 1
             return _CorrectionBuffer(_materialize(correction, eltype(like)), UInt64(width), UInt64(0), UInt64(0))
-        elseif ndims(correction) == 2 && size(correction, 1) == segments
-            packed = _permuted_buffer(correction, eltype(like), size(correction), (2, 1))
+        elseif ndims(correction) == 2 && size(correction, 2) == segments
+            packed = _materialize(correction, eltype(like))
             return _CorrectionBuffer(packed, UInt64(width), UInt64(0), UInt64(width))
         end
 
-        expected = (batch_shape..., segments, width)
+        expected = (width, segments, batch_shape...)
         size(correction) == expected || throw(ArgumentError(
-            "correction must have shape ($width,), ($segments, $width), or $expected, got $(size(correction))",
+            "correction must have shape ($width,), ($width, $segments), or $expected, got $(size(correction))",
         ))
-        packed = _permuted_buffer(correction, eltype(like), (batch_size, segments, width), (3, 2, 1))
+        packed = _reshape_buffer(_materialize(correction, eltype(like)), (width, segments, batch_size))
         return _CorrectionBuffer(packed, UInt64(width), UInt64(Base.checked_mul(segments, width)), UInt64(width))
     end
 end
@@ -96,16 +96,7 @@ end
 _backend(::AbstractArray) = :cpu
 _with_array(f, ::AbstractArray) = f()
 _materialize(x::AbstractArray, ::Type{T}) where {T} = x isa Array{T} ? x : Array{T}(x)
-
-# GPU permutation kernels need a nonempty launch grid.
-_permute(x, axes) = isempty(x) ? similar(x, map(i -> size(x, i), axes)) : permutedims(x, axes)
-
-# Pack views and convert precision directly into the native layout.
-function _permuted_buffer(x, ::Type{T}, dims, axes) where {T}
-    x isa Array{T} && return _permute(reshape(x, dims), axes)
-    out = Array{T}(undef, map(i -> dims[i], axes))
-    return permutedims!(out, reshape(x, dims), axes)
-end
+_reshape_buffer(x, dims::Tuple) = size(x) == dims ? x : reshape(x, dims)
 
 function _allocate(like::AbstractArray, dims::Integer...; zero::Bool=false)
     return _with_array(like) do
@@ -126,17 +117,17 @@ function _path_buffer(path::AbstractArray{T,N}, function_name::Symbol=:sig) wher
 
         S = _storage_eltype(T, function_name)
         path_size = size(path)
-        len = path_size[end - 1]
-        dimension = path_size[end]
-        batch_shape = path_size[1:end - 2]
+        dimension = path_size[1]
+        len = path_size[2]
+        batch_shape = path_size[3:end]
         batch_size = isempty(batch_shape) ? 1 : prod(batch_shape)
 
         dimension >= 1 || throw(ArgumentError("path has 0 channels; dimension must be positive"))
         len >= 1 || throw(ArgumentError("path length must be positive"))
 
-        # Public shape follows pySigLib: (batch..., length, dimension). The C ABI is
-        # row-major [batch][length][dimension], equivalent to Julia (dimension, length, batch).
-        return _permuted_buffer(path, S, (batch_size, len, dimension), (3, 2, 1)),
+        # Julia's channel-first, batch-last storage matches the row-major C ABI.
+        # Dense inputs share storage; only views and precision conversions copy.
+        return _reshape_buffer(_materialize(path, S), (dimension, len, batch_size)),
             batch_shape, batch_size, dimension, len
     end
 end
@@ -147,8 +138,7 @@ function _format_signature_output(out::AbstractMatrix{T}, batch_shape::Tuple) wh
             return vec(out)
         end
 
-        batch_first = _permute(out, (2, 1))
-        return reshape(batch_first, batch_shape..., size(out, 1))
+        return _reshape_buffer(out, (size(out, 1), batch_shape...))
     end
 end
 
@@ -162,28 +152,19 @@ function _signature_buffer(
     like::AbstractArray=x,
 ) where {T<:Union{Float32,Float64}}
     return _with_array(x) do
-        expected_size = isempty(batch_shape) ? (siglen,) : (batch_shape..., siglen)
+        expected_size = (siglen, batch_shape...)
         size(x) == expected_size ||
             throw(ArgumentError("$name must have shape $expected_size, got $(size(x))"))
 
         _check_backend(like, x)
-        if isempty(batch_shape)
-            return reshape(_materialize(x, T), siglen, batch_size)
-        end
-
-        return _permuted_buffer(x, T, (batch_size, siglen), (2, 1))
+        return _reshape_buffer(_materialize(x, T), (siglen, batch_size))
     end
 end
 
 function _format_path_output(out::AbstractArray{T,3}, batch_shape::Tuple) where {T}
     return _with_array(out) do
         dimension, len, _ = size(out)
-        batch_first = _permute(out, (3, 2, 1))
-        if isempty(batch_shape)
-            return reshape(batch_first, len, dimension)
-        end
-
-        return reshape(batch_first, batch_shape..., len, dimension)
+        return _reshape_buffer(out, (dimension, len, batch_shape...))
     end
 end
 
@@ -195,7 +176,7 @@ function _signature_like_buffer(
 ) where {T<:Real,N,S<:Union{Float32,Float64}}
     N >= 1 || throw(ArgumentError("$name must have at least rank 1"))
 
-    batch_shape = size(x)[1:end - 1]
+    batch_shape = size(x)[2:end]
     batch_size = isempty(batch_shape) ? 1 : prod(batch_shape)
     return _signature_buffer(x, S, siglen, batch_shape, batch_size, name), batch_shape, batch_size
 end

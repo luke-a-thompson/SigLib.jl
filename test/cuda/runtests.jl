@@ -29,7 +29,7 @@ function parity(f, args...; gpu_args=map(x -> x isa AbstractArray ? CuArray(x) :
 end
 
 @testset "CUDA forward and pullback parity" begin
-    for T in (Float32, Float64), shape in ((4, 2), (2, 3, 4, 2))
+    for T in (Float32, Float64), shape in ((2, 4), (2, 4, 3, 2))
         path = reshape(T.(sin.(1:prod(shape)) ./ 4), shape)
         for time_aug in (false, true), lead_lag in (false, true)
             options = (; time_aug, lead_lag, end_time=0.7)
@@ -57,7 +57,7 @@ end
             parity(branched_log_sig, path, 3; options..., planar=true, method=3)
         end
         l = log_sig(path, 3; method=2)
-        displacement = fill(T(0.2), size(path)[1:end-2]..., 2)
+        displacement = fill(T(0.2), 2, size(path)[3:end]...)
         parity(log_sig_combine, l, l, 2, 3)
         parity(log_sig_join, l, displacement, 2, 3)
     end
@@ -65,10 +65,10 @@ end
 
 @testset "CUDA correction forward and pullback parity" begin
     for T in (Float32, Float64), time_aug in (false, true), scalar_term in (false, true)
-        path = reshape(T.(sin.(1:48) ./ 4), 2, 3, 4, 2)
+        path = reshape(T.(sin.(1:48) ./ 4), 2, 4, 3, 2)
         constant = T.(cos.(1:12) ./ 20)
-        shared = reshape(T.(sin.(1:36) ./ 20), 3, 12)
-        specific = reshape(T.(cos.(1:216) ./ 20), 2, 3, 3, 12)
+        shared = reshape(T.(sin.(1:36) ./ 20), 12, 3)
+        specific = reshape(T.(cos.(1:216) ./ 20), 12, 3, 3, 2)
         for correction in (constant, shared, specific)
             options = (; correction, time_aug, scalar_term, end_time=0.7)
             parity(sig, path, 3; options...)
@@ -84,12 +84,12 @@ end
             end
         end
     end
-    path = [0.0 0.0; 0.3 -0.2; -0.1 0.5]
+    path = [0.0 0.3 -0.1; 0.0 -0.2 0.5]
     gpu = CuArray(path)
-    rows = reshape(sin.(1:16) ./ 20, 2, 8)
+    rows = reshape(sin.(1:16) ./ 20, 8, 2)
     correction = CuArray(rows)
-    @test Array(sig(gpu, 3; correction=@view(correction[:, 1:2:8]))) ≈
-        sig(path, 3; correction=@view(rows[:, 1:2:8]))
+    @test Array(sig(gpu, 3; correction=@view(correction[1:2:8, :]))) ≈
+        sig(path, 3; correction=@view(rows[1:2:8, :]))
     @test_throws ArgumentError sig(gpu, 3; correction=ones(4))
     @test_throws ArgumentError sig(path, 3; correction=CuArray(ones(4)))
     @test_throws ArgumentError sig(gpu, 3; correction=CuArray(ones(4)), lead_lag=true)
@@ -98,15 +98,15 @@ end
 end
 
 @testset "CUDA buffers, boundaries and cache lifecycle" begin
-    path = reshape(sin.(1:48) ./ 4, 3, 8, 2)
+    path = reshape(sin.(1:48) ./ 4, 2, 8, 3)
     gpu = CuArray(path)
     for f in (sig, log_sig, branched_sig, branched_log_sig)
         parity(f, @view(path[:, 1:2:8, :]), 3; gpu_args=(@view(gpu[:, 1:2:8, :]), 3))
-        empty_batch = f(CuArray(zeros(Float32, 0, 4, 2)), 3)
-        @test empty_batch isa CuArray && size(empty_batch, 1) == 0
+        empty_batch = f(CuArray(zeros(Float32, 2, 4, 0)), 3)
+        @test empty_batch isa CuArray && size(empty_batch, 2) == 0
         parity(f, path, 0)
         parity(f, path, 0; scalar_term=true)
-        parity(f, zeros(1, 2), 3)
+        parity(f, zeros(2, 1), 3)
     end
     @test Array(sig(gpu .+ 0.1, 3)) ≈ sig(path .+ 0.1, 3)
     for method in 0:3
@@ -115,13 +115,13 @@ end
     end
     mixed = log_sig(Float32.(path), 3; method=2)
     parity(log_sig_combine, mixed, Float64.(mixed), 2, 3)
-    parity(log_sig_join, mixed, fill(0.2, 3, 2), 2, 3)
+    parity(log_sig_join, mixed, fill(0.2, 2, 3), 2, 3)
     l = log_sig(gpu, 3; method=2)
     @test_throws ArgumentError log_sig_combine(l, Array(l), 2, 3)
     @test_throws ArgumentError log_sig_combine(Array(l), l, 2, 3)
-    @test_throws ArgumentError log_sig_join(l, zeros(3, 2), 2, 3)
-    @test_throws ArgumentError SigLib._sig_backprop(gpu, sig(gpu, 3), ones(3, 14), 3)
-    @test_throws TypeError sig(CuArray(ones(Int, 4, 2)), 3)
+    @test_throws ArgumentError log_sig_join(l, zeros(2, 3), 2, 3)
+    @test_throws ArgumentError SigLib._sig_backprop(gpu, sig(gpu, 3), ones(14, 3), 3)
+    @test_throws TypeError sig(CuArray(ones(Int, 2, 4)), 3)
     @test_throws ArgumentError sig(gpu, 3; correction=CuArray(ones(1)))
     @test_throws ArgumentError clear_log_sig_cache(; device=:unknown)
     @test_throws ArgumentError branched_log_sig(gpu, 21; planar=true, method=3)
@@ -148,7 +148,7 @@ end
 
 if length(collect(CUDA.devices())) > 1
     @testset "CUDA input context overrides the active device" begin
-        path = [0.0 0.0; 0.3 -0.2; -0.1 0.5]
+        path = [0.0 0.3 -0.1; 0.0 -0.2 0.5]
         first_device = CuArray(path)
         l = log_sig(first_device, 3; method=2)
         CUDA.device!(collect(CUDA.devices())[2]) do

@@ -43,17 +43,17 @@ function _signature_input_buffer(
     siglen = sig_length(dimension, degree; time_aug=time_aug, lead_lag=lead_lag)
     siglen_scalar = siglen + 1
     N >= 1 || throw(ArgumentError("$name must have at least rank 1"))
-    lastdim = size(x, N)
-    if lastdim == siglen
+    width = size(x, 1)
+    if width == siglen
         buf, batch_shape, batch_size = _signature_like_buffer(x, S, siglen, name)
         return buf, batch_shape, batch_size, false
-    elseif lastdim == siglen_scalar
+    elseif width == siglen_scalar
         buf, batch_shape, batch_size = _signature_like_buffer(x, S, siglen_scalar, name)
         return buf, batch_shape, batch_size, true
     end
 
     throw(ArgumentError(
-        "$name must have last dimension $siglen or $siglen_scalar, got $lastdim",
+        "$name must have first dimension $siglen or $siglen_scalar, got $width",
     ))
 end
 

@@ -21,7 +21,7 @@ function _test_pullback_input(f, x, ybar, xbar; atol=1e-7, rtol=1e-6)
 end
 
 @testset "ChainRules extensions" begin
-    path = [0.0 0.0; 0.5 1.0; 1.0 -0.25]
+    path = [0.0 0.5 1.0; 0.0 1.0 -0.25]
 
     sig_value, sig_pullback = rrule(sig, path, 2)
     sig_bar = collect(range(0.1, step=0.05, length=length(sig_value)))
@@ -41,7 +41,7 @@ end
         sig_scalar_tangents[2],
     )
 
-    path32 = Float32[0.0 0.0; 0.5 1.0; 1.0 -0.25]
+    path32 = Float32[0.0 0.5 1.0; 0.0 1.0 -0.25]
     sig32_value, sig32_pullback = rrule(sig, path32, 2)
     sig32_tangents = sig32_pullback(ones(Float32, size(sig32_value)))
     @test size(sig32_tangents[2]) == size(path32)
@@ -82,7 +82,7 @@ end
         branched_log_tangents[2],
     )
 
-    other_bsig = branched_sig([0.0 0.0; 0.25 0.5; 0.5 -0.5], 2)
+    other_bsig = branched_sig([0.0 0.25 0.5; 0.0 0.5 -0.5], 2)
     bcombine_value, bcombine_pullback = rrule(
         branched_sig_combine, bsig_value, other_bsig, 2, 2,
     )
@@ -151,7 +151,7 @@ end
         )
     end
 
-    other_logsig = log_sig([0.0 0.0; 0.25 0.5; 0.5 -0.5], 2; method=2)
+    other_logsig = log_sig([0.0 0.25 0.5; 0.0 0.5 -0.5], 2; method=2)
     lcombine_value, lcombine_pullback = rrule(
         log_sig_combine, logsig_value, other_logsig, 2, 2,
     )
@@ -196,7 +196,7 @@ end
 
 @testset "branched log method pullbacks" begin
     if SigLib._modern_abi[]
-        path = [0.0 0.0; 0.2 -0.3; 0.7 0.4; 0.5 0.8]
+        path = [0.0 0.2 0.7 0.5; 0.0 -0.3 0.4 0.8]
         for method in 0:3, scalar_term in (false, true)
             options = (; planar=true, method=method, scalar_term=scalar_term)
             y, back = rrule(branched_log_sig, path, 3; options...)
@@ -223,7 +223,7 @@ end
             @test back(Float64[])[2] == zeros(size(path))
             y32, back32 = rrule(branched_log_sig, Float32.(path), 3; planar=true, method=method)
             @test eltype(back32(ones(Float32, size(y32)))[2]) === Float32
-            batch = repeat(reshape(path, 1, 4, 2), 2, 1, 1)
+            batch = repeat(reshape(path, 2, 4, 1), 1, 1, 2)
             yb, backb = rrule(branched_log_sig, batch, 3; planar=true, method=method)
             bar = fill(0.1, size(yb))
             _test_pullback_input(x -> branched_log_sig(x, 3; planar=true, method=method), batch, bar, backb(bar)[2])

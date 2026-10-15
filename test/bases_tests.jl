@@ -77,7 +77,7 @@ end
     @test_throws ArgumentError trees(2, -1)
 
     # Tensor words read chronologically from leaf to root along a chain tree.
-    path = [0.0 0.0; 0.2 -0.3; 0.7 0.4; 0.5 0.8]
+    path = [0.0 0.2 0.7 0.5; 0.0 -0.3 0.4 0.8]
     tensor = sig(path, 3)
     for planar in (false, true)
         branched = branched_sig(path, 3; planar=planar)
@@ -108,7 +108,7 @@ function expand_basis_bracket(expr)
 end
 
 @testset "coordinate bases agree with native logarithms" begin
-    path = [0.0 0.0; 0.2 -0.3; 0.7 0.4; 0.5 0.8]
+    path = [0.0 0.2 0.7 0.5; 0.0 -0.3 0.4 0.8]
     @test log_sig_basis(2, 3; method=1) == lyndon_words(2, 3)
     @test log_sig_basis(2, 3; method=3, scalar_term=true) == lyndon_brackets(2, 3)
     @test log_sig_basis(2, 0; method=0, scalar_term=true) == [()]

@@ -4,12 +4,12 @@
 
 Compute the truncated branched signature of one path or a batch of paths.
 
-The public shape convention follows pySigLib:
+The public shape convention uses channels first and batch dimensions last:
 
-- a single path has shape `(length, dimension)`
-- a batch has shape `(batch..., length, dimension)`
+- a single path has shape `(dimension, length)`
+- a batch has shape `(dimension, length, batch...)`
 - the result has shape `(branched_signature_length,)` or
-  `(batch..., branched_signature_length)`
+  `(branched_signature_length, batch...)`
 
 `correction` uses the tensor-level layouts described in [`sig`](@ref), with
 `degree = max_nodes`. Each word supplies a chain tree labeled from root to leaf
