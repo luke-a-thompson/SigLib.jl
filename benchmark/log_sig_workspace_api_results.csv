@@ -1,0 +1,16 @@
+# Run date: 2026-10-15 Australia/Sydney
+# CPU: AMD Ryzen 9 9950X3D; WSL/Microsoft hypervisor; pinned to logical CPU 2
+# Measures the exported LogSigWorkspace / log_sig! API using existing checked native wrappers.
+# Full Pkg.test suite passed with four Julia threads; workspace correctness, cache clearing, concurrency and zero-allocation tests passed.
+# Julia 1.12.6; cpSIG library: /home/luke/.julia/artifacts/15636ce5b563db1fe73ed5c96d4092e6d4585e2f/lib/libcpsig.so
+# Float64 paths=(4,32,3), method=1, n_jobs=1; warmed; 21 rotated samples of approximately 50ms per variant
+# Workspace results reuse storage and are overwritten on each call; a workspace must not be used concurrently.
+degree,variant,median_us,paired_overhead_us,paired_overhead_pct,julia_alloc_bytes
+4,native_c,10.747059,0,0,0
+4,log_sig,12.867162,2.140198,19.914,9488
+4,log_sig!,11.192431,0.441215,4.105,0
+4,bare_ccall,9.969362,-0.773162,-7.194,0
+5,native_c,21.827696,0,0,0
+5,log_sig,26.208416,4.365743,20.001,20320
+5,log_sig!,23.126943,1.337999,6.130,0
+5,bare_ccall,21.788108,0.002014,0.009,0

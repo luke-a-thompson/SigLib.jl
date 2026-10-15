@@ -1,0 +1,56 @@
+# Run date: 2026-10-15 Australia/Sydney; host benchmark pinned to logical CPU 2.
+# Native cuSIG SHA256: 870cf07f53d3dd77e74984182a088d6be3faedd42116225e35487d4433774308
+# Native cpSIG 4.0 SHA256: 6ed3436eaeb0a8de59610c4d9a56e309e466a5ab5e30fdbfbf50b5d3c2e2c34e
+# CUDA runtime/toolkit 13.2; driver API 13.4; WSL/Microsoft hypervisor.
+# All four default-method cases completed. The final Float32, batch=256, method=3 timing was interrupted by an environment reset and is absent.
+# Validation: CPU/CUDA forward and pullback parity, corrections, views, cache lifecycle, and workspace tests passed (9285 assertions across the named CUDA test sets).
+# Absolute timings varied substantially for Float32 method=3; paired deltas are provided alongside medians.
+# Julia 1.12.6; CUDA.jl 5.11.3; GPU: NVIDIA GeForce RTX 5080
+# CPU library: /tmp/siglib-cuda-bench/cpu/lib/libcpsig.so
+# CUDA library: /tmp/siglib-cuda-bench/cuda/pysiglib_cuda/libcusig.so
+# Inputs stay on GPU; warmed caches and kernels; completed wall-clock work per call; no host/device copies in timed loops.
+# Native C uses preallocated device buffers and synchronizes each completed log-signature call. Matched checks adds Julia's per-native-call barriers and repeated cache preparation.
+# preallocated_wrappers uses existing internal CUDA wrappers; log_sig! uses the public CPU/CUDA workspace.
+dtype,public_shape,degree,method,variant,median_us,paired_overhead_us,paired_overhead_pct,julia_host_alloc_bytes
+Float64,3x32x4,4,1,native_c,94.961947,0,0,0
+Float64,3x32x4,4,1,native_c_matched_checks,89.540137,0.552104,0.581,0
+Float64,3x32x4,4,1,bare_ccall,104.768505,0.497704,0.524,144
+Float64,3x32x4,4,1,preallocated_wrappers,98.497043,7.038380,7.412,1376
+Float64,3x32x4,4,1,log_sig!,98.063640,9.770198,10.289,1552
+Float64,3x32x4,4,1,log_sig,100.686864,12.491079,13.154,2288
+Float64,3x32x4,4,3,native_c,155.252349,0,0,0
+Float64,3x32x4,4,3,native_c_matched_checks,168.702969,4.979243,3.207,0
+Float64,3x32x4,4,3,bare_ccall,156.848870,-0.061795,-0.040,112
+Float64,3x32x4,4,3,preallocated_wrappers,166.782610,10.379521,6.686,880
+Float64,3x32x4,4,3,log_sig!,164.481671,6.110082,3.936,1056
+Float64,3x32x4,4,3,log_sig,174.803137,16.438414,10.588,1440
+Float64,3x32x4,5,1,native_c,115.602143,0,0,0
+Float64,3x32x4,5,1,native_c_matched_checks,106.605786,2.457571,2.126,0
+Float64,3x32x4,5,1,bare_ccall,104.438071,-10.144286,-8.775,144
+Float64,3x32x4,5,1,preallocated_wrappers,104.761571,-9.767857,-8.450,1376
+Float64,3x32x4,5,1,log_sig!,107.362214,5.859714,5.069,1552
+Float64,3x32x4,5,1,log_sig,124.486143,21.068571,18.225,2288
+Float64,3x32x4,5,3,native_c,501.004891,0,0,0
+Float64,3x32x4,5,3,native_c_matched_checks,505.720033,3.698750,0.738,0
+Float64,3x32x4,5,3,bare_ccall,506.857957,3.038576,0.606,112
+Float64,3x32x4,5,3,preallocated_wrappers,520.427989,11.248293,2.245,880
+Float64,3x32x4,5,3,log_sig!,509.149859,9.816391,1.959,1056
+Float64,3x32x4,5,3,log_sig,525.534098,26.424859,5.274,1440
+Float32,2x129x32,6,1,native_c,81.339123,0,0,0
+Float32,2x129x32,6,1,native_c_matched_checks,82.325804,0.845202,1.039,0
+Float32,2x129x32,6,1,bare_ccall,83.951905,-0.827158,-1.017,144
+Float32,2x129x32,6,1,preallocated_wrappers,85.245801,4.799103,5.900,1376
+Float32,2x129x32,6,1,log_sig!,83.689633,4.834376,5.943,1552
+Float32,2x129x32,6,1,log_sig,90.200625,10.565630,12.990,2464
+Float32,2x129x256,6,1,native_c,85.527420,0,0,0
+Float32,2x129x256,6,1,native_c_matched_checks,89.683375,2.156268,2.521,0
+Float32,2x129x256,6,1,bare_ccall,90.633132,1.505443,1.760,144
+Float32,2x129x256,6,1,preallocated_wrappers,100.294182,8.464482,9.897,1376
+Float32,2x129x256,6,1,log_sig!,96.776652,9.576304,11.197,1552
+Float32,2x129x256,6,1,log_sig,102.730571,14.716593,17.207,2288
+Float32,2x129x32,6,3,native_c,2461.725778,0,0,0
+Float32,2x129x32,6,3,native_c_matched_checks,2245.589689,24.040267,0.977,0
+Float32,2x129x32,6,3,bare_ccall,2178.340578,-20.136200,-0.818,112
+Float32,2x129x32,6,3,preallocated_wrappers,2083.010867,-23.709000,-0.963,880
+Float32,2x129x32,6,3,log_sig!,1530.530467,-9.163178,-0.372,1056
+Float32,2x129x32,6,3,log_sig,2465.735956,39.966911,1.624,1440

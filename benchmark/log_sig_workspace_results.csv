@@ -1,0 +1,29 @@
+# Run date: 2026-10-15 Australia/Sydney
+# CPU: AMD Ryzen 9 9950X3D; WSL/Microsoft hypervisor; process pinned to logical CPU 2
+# Validation: matching outputs at degrees 4 and 5, changed inputs, cache clearing, shape rejection, zero allocations; all assertions passed.
+# Julia 1.12.6; cpSIG library: /home/luke/.julia/artifacts/15636ce5b563db1fe73ed5c96d4092e6d4585e2f/lib/libcpsig.so
+# Float64 paths=(4,32,3), method=1, n_jobs=1; warmed; 21 rotated samples of approximately 50ms per variant
+# Workspace results reuse storage and are overwritten on each call; a workspace must not be used concurrently.
+degree,variant,median_us,paired_overhead_us,paired_overhead_pct,julia_alloc_bytes
+4,native_c,10.048829,0,0,0
+4,public,12.707246,2.653660,26.408,9488
+4,workspace_public_layout,11.082219,1.018316,10.134,0
+4,workspace_native_layout,10.689423,0.657502,6.543,0
+4,bare_ccall,10.022584,-0.003040,-0.030,0
+# component,4,path_packing_allocating,0.486782,3208
+# component,4,path_packing_reused,0.202886,0
+# component,4,output_format_allocating,0.122779,1184
+# component,4,output_format_reused,0.062140,0
+# component,4,prepare_public,0.847390,0
+# component,4,symbol_lookup,0.028060,0
+5,native_c,22.157663,0,0,0
+5,public,26.348400,3.888021,17.547,20320
+5,workspace_public_layout,23.350631,1.148445,5.183,0
+5,workspace_native_layout,22.858048,0.722964,3.263,0
+5,bare_ccall,22.177821,0.004492,0.020,0
+# component,5,path_packing_allocating,0.490377,3208
+# component,5,path_packing_reused,0.202671,0
+# component,5,output_format_allocating,0.372849,2696
+# component,5,output_format_reused,0.140974,0
+# component,5,prepare_public,0.897136,0
+# component,5,symbol_lookup,0.028238,0

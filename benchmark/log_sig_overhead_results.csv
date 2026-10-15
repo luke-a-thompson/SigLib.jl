@@ -1,0 +1,16 @@
+# Run date: 2026-10-15 Australia/Sydney
+# CPU: AMD Ryzen 9 9950X3D; WSL/Microsoft hypervisor; process pinned to logical CPU 2 with taskset
+# Native workloads mirror local pySigLib benchmarks/bench_cpsig.cpp; standalone harness replaces the unavailable Google Benchmark framework.
+# overhead_pct uses the median paired Julia-minus-C difference, not the difference of separate medians.
+# Julia 1.12.6; threads=1; native n_jobs=1; samples=15; target=50ms/sample
+# Library: /home/luke/.julia/artifacts/15636ce5b563db1fe73ed5c96d4092e6d4585e2f/lib/libcpsig.so
+# Native buffers preallocated; Julia public call includes packing, allocations, preparation checks and GC; compilation and initial cache setup excluded.
+dtype,public_shape,degree,method,standalone_c_us,c_us,bare_ccall_us,julia_us,paired_overhead_us,overhead_pct,julia_alloc_bytes,overhead_q25_us,overhead_q75_us
+Float64,3x2,2,3,0.031442,0.030923,0.031499,1.110282,1.078623,3488.072,320,1.055433,1.096107
+Float64,3x2,2,1,0.141682,0.144797,0.145028,1.347039,1.193853,824.502,448,1.180875,1.224355
+Float64,4x32x3,4,3,31.771044,31.551868,31.618852,34.047757,2.413444,7.649,5560,2.214835,2.900309
+Float64,4x32x3,5,3,180.294381,180.206696,180.734885,185.411496,5.306770,2.945,8584,3.646937,5.974407
+Float64,4x32x3,4,1,9.992932,9.978927,9.967870,12.938058,2.990121,29.964,9488,2.884348,3.215735
+Float64,4x32x3,5,1,21.529165,21.961783,21.933655,28.757485,6.919224,31.506,20320,4.528906,7.652514
+Float32,32x129x2,6,3,3331.075400,3321.567350,3345.040100,3315.520900,6.685250,0.201,39304,-46.322850,29.056150
+Float64,129x2,8,3,1209.641707,1212.118854,1214.565463,1222.117829,10.288537,0.849,2968,5.738585,12.984146

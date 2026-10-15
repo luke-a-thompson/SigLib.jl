@@ -1,0 +1,61 @@
+# Run date: 2026-10-15 Australia/Sydney
+# GPU: NVIDIA GeForce RTX 5080; WSL/Microsoft hypervisor; host benchmark pinned to logical CPU 2
+# Paired local pySigLib 4.0 native builds; temporary package copy and artifact overrides in /tmp/siglib-cuda-bench
+# Validation: all eight cases passed CUDA C versus Julia CUDA, preallocated wrapper versus raw CUDA, and CUDA versus CPU numerical checks.
+# Native source: /home/luke/pySigLibax/build/branched-polynomial/siglib/cpsig/libcpsig.so
+# SHA256: 6ed3436eaeb0a8de59610c4d9a56e309e466a5ab5e30fdbfbf50b5d3c2e2c34e
+# Native source: /home/luke/pySigLibax/build/branched-polynomial/cusig_build/libcusig.so
+# SHA256: 870cf07f53d3dd77e74984182a088d6be3faedd42116225e35487d4433774308
+# runtime=13.2.0
+# driver=13.4.0
+# julia_toolkit_version=13.2.0
+# gpu=NVIDIA GeForce RTX 5080
+# Measurements use 15 rotated samples; host/device copies and initial compilation/cache construction excluded.
+# Preallocated wrappers use native array layout; they do not include public input/output permutations. Julia allocation counts are host bytes only.
+# Julia 1.12.6; CUDA.jl 5.11.3; GPU: NVIDIA GeForce RTX 5080
+# CPU library: /tmp/siglib-cuda-bench/cpu/lib/libcpsig.so
+# CUDA library: /tmp/siglib-cuda-bench/cuda/pysiglib_cuda/libcusig.so
+# Inputs stay on GPU; warmed caches and kernels; completed wall-clock work per call; no host/device copies in timed loops.
+# Native C uses preallocated device buffers and synchronizes each completed log-signature call. Matched checks adds Julia's per-native-call barriers and repeated cache preparation.
+# preallocated_wrappers uses existing internal CUDA wrappers; the public LogSigWorkspace currently supports CPU only.
+dtype,public_shape,degree,method,variant,median_us,paired_overhead_us,paired_overhead_pct,julia_host_alloc_bytes
+Float64,4x32x3,4,1,native_c,77.193699,0,0,0
+Float64,4x32x3,4,1,native_c_matched_checks,77.695388,0.012156,0.016,0
+Float64,4x32x3,4,1,bare_ccall,77.030740,-0.359153,-0.465,144
+Float64,4x32x3,4,1,preallocated_wrappers,84.332161,6.742820,8.735,1344
+Float64,4x32x3,4,1,log_sig,253.948393,174.882587,226.550,8880
+Float64,4x32x3,4,3,native_c,148.917242,0,0,0
+Float64,4x32x3,4,3,native_c_matched_checks,149.733049,0.821283,0.552,0
+Float64,4x32x3,4,3,bare_ccall,149.374969,1.265359,0.850,112
+Float64,4x32x3,4,3,preallocated_wrappers,158.249072,9.781830,6.569,848
+Float64,4x32x3,4,3,log_sig,503.512632,351.129668,235.788,9872
+Float64,4x32x3,5,1,native_c,86.663828,0,0,0
+Float64,4x32x3,5,1,native_c_matched_checks,89.445951,2.263378,2.612,0
+Float64,4x32x3,5,1,bare_ccall,87.295596,2.026880,2.339,144
+Float64,4x32x3,5,1,preallocated_wrappers,95.453997,8.778688,10.130,1344
+Float64,4x32x3,5,1,log_sig,254.846155,170.153693,196.338,8160
+Float64,4x32x3,5,3,native_c,484.735826,0,0,0
+Float64,4x32x3,5,3,native_c_matched_checks,488.342337,3.730870,0.770,0
+Float64,4x32x3,5,3,bare_ccall,491.463696,2.446815,0.505,112
+Float64,4x32x3,5,3,preallocated_wrappers,496.232424,11.597000,2.392,848
+Float64,4x32x3,5,3,log_sig,1185.036880,695.275000,143.434,6864
+Float32,32x129x2,6,1,native_c,72.167410,0,0,0
+Float32,32x129x2,6,1,native_c_matched_checks,78.931022,5.535461,7.670,0
+Float32,32x129x2,6,1,bare_ccall,75.527342,3.379189,4.682,144
+Float32,32x129x2,6,1,preallocated_wrappers,82.195652,10.195404,14.127,1344
+Float32,32x129x2,6,1,log_sig,230.553466,154.837873,214.554,7904
+Float32,256x129x2,6,1,native_c,77.099796,0,0,0
+Float32,256x129x2,6,1,native_c_matched_checks,79.742124,4.914248,6.374,0
+Float32,256x129x2,6,1,bare_ccall,77.137150,0.145879,0.189,144
+Float32,256x129x2,6,1,preallocated_wrappers,83.559156,6.371670,8.264,1344
+Float32,256x129x2,6,1,log_sig,225.162463,148.062667,192.040,8176
+Float32,32x129x2,6,3,native_c,1112.475692,0,0,0
+Float32,32x129x2,6,3,native_c_matched_checks,1114.202846,-4.339000,-0.390,0
+Float32,32x129x2,6,3,bare_ccall,1120.723615,-10.056000,-0.904,112
+Float32,32x129x2,6,3,preallocated_wrappers,1127.491077,-11.137231,-1.001,848
+Float32,32x129x2,6,3,log_sig,2202.018692,1050.672308,94.445,10496
+Float32,256x129x2,6,3,native_c,1119.159250,0,0,0
+Float32,256x129x2,6,3,native_c_matched_checks,1094.744250,-25.736375,-2.300,0
+Float32,256x129x2,6,3,bare_ccall,1099.201375,1.420125,0.127,112
+Float32,256x129x2,6,3,preallocated_wrappers,1118.043375,-2.484875,-0.222,848
+Float32,256x129x2,6,3,log_sig,4110.901875,2987.230375,266.917,11616

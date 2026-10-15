@@ -1,0 +1,12 @@
+# Julia 1.12.6; cpSIG library: /home/luke/.julia/artifacts/15636ce5b563db1fe73ed5c96d4092e6d4585e2f/lib/libcpsig.so
+# Float64 paths=(3,32,4), method=1, n_jobs=1; warmed; 21 rotated samples of approximately 50ms per variant
+# Workspace results reuse storage and are overwritten on each call; a workspace must not be used concurrently.
+degree,variant,median_us,paired_overhead_us,paired_overhead_pct,julia_alloc_bytes
+4,native_c,10.259560,0,0,0
+4,log_sig,12.196612,1.936014,18.870,5096
+4,log_sig!,11.123240,0.863102,8.413,0
+4,bare_ccall,10.289806,0.019749,0.192,0
+5,native_c,22.162465,0,0,0
+5,log_sig,26.162433,3.982924,17.971,14416
+5,log_sig!,23.304825,1.104094,4.982,0
+5,bare_ccall,22.780029,0.672674,3.035,0

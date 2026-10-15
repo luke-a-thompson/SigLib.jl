@@ -146,6 +146,20 @@ julia --project=test/cuda -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate(
 julia --project=test/cuda --threads=4 test/cuda/runtests.jl
 ```
 
+## Benchmarks
+
+The Linux harnesses in `benchmark/` compare native C calls with the allocating Julia API and reusable workspaces. They require `g++`; the CUDA harness also needs CUDA.jl, a working NVIDIA GPU, the CUDA SDK, and matching 4.x native artifacts or local artifact overrides. Set `SIGLIB_BENCH_CUDA_ROOT` if the SDK is outside `/usr/local/cuda`.
+
+```sh
+julia --project=. benchmark/log_sig_overhead.jl
+julia --project=. benchmark/log_sig_workspace.jl
+julia --project=test/cuda benchmark/log_sig_cuda_overhead.jl
+```
+
+Timings exclude compilation and initial cache construction. The native C baseline uses preallocated buffers; allocating Julia calls include allocation and cache checks. CUDA timings synchronize completed work and exclude host/device transfers. Overhead percentages use the median paired Julia-minus-C difference, which can differ from the difference between separately reported medians.
+
+Files ending in `_batch_last_results.csv` record the current layout. Other CSV files retain measurements from the earlier batch-first API; `log_sig_workspace_results.csv` contains prototype experiments rather than the exported workspace API. Snapshot headers record the environment and validation, including the interrupted final CUDA BCH timing. The scripts use the current API and will produce new measurements when rerun.
+
 ## Native artifacts
 
 The root `Artifacts.toml` currently pins the existing, verified 3.1 bootstrap binary. Import the published upstream manifest with `julia scripts/update_artifacts.jl vVERSION`, then run `julia --project -e 'using Pkg; Pkg.test()'` before committing it. The updater checks artifact hashes, download checksums, and release URLs before replacing the file. CUDA calls load the lazy `pysiglib_cuda12` artifact on first use. CPU and CUDA artifacts must come from the same 4.x release.
