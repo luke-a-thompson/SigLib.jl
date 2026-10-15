@@ -50,9 +50,22 @@ sig(path, 3; correction=rows) # same correction supplied per segment
 
 For ordinary log signatures, method 0 returns tensor logarithms, method 1 extracts Lyndon-word coordinates, method 2 returns Lyndon-basis coordinates, and method 3 computes Lyndon-basis coordinates directly through BCH. Combine/join expect method-2 or method-3 coordinates. Methods 1–3 use compressed outputs and ignore `scalar_term`.
 
+For repeated CPU or CUDA calls of the same shape and precision, `LogSigWorkspace` reuses the intermediate signature and output buffers; dense paths are passed directly to the native library. It supports `Float32` and `Float64`, views, and methods 0–3 with the usual array shapes. The workspace API computes untransformed paths without corrections or a scalar term; use `log_sig` for those options. Degree and method are fixed at construction, and `n_jobs` can be changed per call.
+
+```julia
+path = randn(3, 32, 4)
+workspace = LogSigWorkspace(path, 5; method=1)
+result = log_sig!(workspace, path)
+saved = copy(result)             # retain a result across later calls
+path .*= 0.7
+log_sig!(workspace, path)         # overwrites result; saved keeps the previous value
+```
+
+The returned array belongs to the workspace and is overwritten on each call. Use a separate workspace for each concurrent computation. Native cache preparation and clearing remain synchronized; a workspace remains usable after `clear_log_sig_cache()`. The warmed call allocates no Julia memory for dense rank-3 CPU paths; CUDA calls reuse device storage.
+
 Branched log signatures follow Python's defaults: method 0 for nonplanar paths and method 1 for planar paths. Method 0 returns the expanded Hopf logarithm; planar methods 1 and 2 return extracted weighted Lyndon coordinates and MKW basis coordinates, respectively. Method 3 computes the same coordinates as method 2 directly through BCH. Conversion from a branched signature supports methods 0–2 and infers the scalar term from the input length; method 0 preserves that format, while compressed outputs are scalar-free. `branched_log_sig_length` returns the nonplanar tree count or the compressed planar length. Methods 1–3 require a 4.x native artifact; with the 3.1 bootstrap, use `planar=true, method=0` for expanded planar logs.
 
-Load `ChainRulesCore` to enable reverse-mode rules for the numerical operations. Composed log-signature rules reuse the forward signature. `n_jobs=1` runs native computations serially; `-1` requests all available native threads. Cache-dependent operations are synchronized across Julia tasks, including preparation, clearing, and pullbacks. The native operation can still use multiple threads internally. Cache lifetime is shared within the process; external calls into the same library must obey the same synchronization rules.
+Load `ChainRulesCore` to enable reverse-mode rules for the allocating numerical operations. Composed log-signature rules reuse the forward signature. `n_jobs=1` runs native computations serially; `-1` requests all available native threads. Cache-dependent operations are synchronized across Julia tasks, including preparation, clearing, and pullbacks. The native operation can still use multiple threads internally. Cache lifetime is shared within the process; external calls into the same library must obey the same synchronization rules.
 
 In-memory caches prepare automatically. Use `set_cache_dir(directory)` before requesting persistent disk caches with `use_disk=true`; SigLib creates the parent directory. The legacy 3.1 binary uses a temporary directory for its in-memory cache bookkeeping. Upstream 4.x does not need that directory.
 
@@ -108,7 +121,7 @@ Enumeration materializes the requested basis, so memory grows with the number of
 
 ## CUDA
 
-Install CUDA.jl 5.x and pass `CuArray` inputs to the numerical functions. The allocating functions and their ChainRules pullbacks run through native cuSIG; results and gradients stay on the GPU. Load ChainRulesCore when derivatives are needed.
+Install CUDA.jl 5.x and pass `CuArray` inputs to the numerical functions or `LogSigWorkspace`. The allocating functions and their ChainRules pullbacks run through native cuSIG; results and gradients stay on the GPU. Load ChainRulesCore when derivatives are needed.
 
 ```julia
 using SigLib, CUDA, ChainRulesCore
@@ -117,6 +130,8 @@ sig(path, 3)                              # CuVector
 branched_log_sig(path, 3; planar=true)     # CuVector
 batch = CUDA.randn(Float32, 3, 32, 4)     # 4 paths, 32 points, 3 channels
 log_sig(batch, 5)                         # CuMatrix: (coefficients, 4)
+workspace = LogSigWorkspace(batch, 5)
+log_sig!(workspace, batch)                # reuse intermediate and output storage
 clear_log_sig_cache(; device=:cuda)
 ```
 

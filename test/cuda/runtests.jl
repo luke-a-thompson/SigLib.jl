@@ -162,3 +162,32 @@ if length(collect(CUDA.devices())) > 1
         end
     end
 end
+
+@testset "CUDA batch-last storage and workspace" begin
+    for T in (Float32, Float64), method in 0:3
+        host = reshape(T.(sin.(1:120) ./ 4), 2, 5, 3, 4)
+        path = CuArray(host)
+        @test pointer(SigLib._path_buffer(path)[1]) == pointer(path)
+        ws = LogSigWorkspace(path, 3; method)
+        expected = log_sig(host, 3; method)
+        result = log_sig!(ws, path)
+        @test result isa CuArray && size(result) == size(expected)
+        @test pointer(result) == pointer(ws.logarithm)
+        @test Array(result) ≈ expected
+        saved = Array(result)
+        path .*= T(0.7)
+        @test log_sig!(ws, path) === result
+        @test Array(result) ≈ log_sig(host .* T(0.7), 3; method)
+        @test saved ≈ expected
+        clear_log_sig_cache(; device=:cuda)
+        @test Array(log_sig!(ws, path)) ≈ log_sig(host .* T(0.7), 3; method)
+        @test_throws ArgumentError log_sig!(ws, host)
+        @test_throws ArgumentError log_sig!(LogSigWorkspace(host, 3; method), path)
+        windows = @view path[:, 1:2:5, :, :]
+        @test Array(log_sig!(LogSigWorkspace(windows, 3; method), windows)) ≈ log_sig(host[:, 1:2:5, :, :] .* T(0.7), 3; method)
+        for shape in ((2, 5), (2, 5, 0)), degree in (0, 3)
+            small = CuArray(zeros(T, shape))
+            @test Array(log_sig!(LogSigWorkspace(small, degree; method), small)) ≈ log_sig(zeros(T, shape), degree; method)
+        end
+    end
+end

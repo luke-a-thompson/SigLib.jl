@@ -7,6 +7,8 @@ using SigLib
 path = [0.0 0.5 1.0; 0.0 1.0 -0.25] # (dimension, length)
 sig(path, 2)
 log_sig(path, 2; method=2)
+workspace = LogSigWorkspace(path, 2; method=2)
+log_sig!(workspace, path) # reuse buffers for subsequent paths of the same shape
 branched_sig(path, 2)
 sig(path, 3; correction=[-0.01, 0.0, 0.0, -0.01]) # local level-2 correction
 lyndon_brackets(2, 3) # standard brackets in method-2/3 coordinate order
