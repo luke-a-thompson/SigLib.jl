@@ -1,5 +1,5 @@
 @testset "log signature workspace" begin
-    for T in (Float32, Float64), method in 0:3
+    for T in (Float32, Float64), method in instances(LogSigMethod.T)
         for shape in ((2, 5), (2, 5, 4), (2, 5, 3, 2))
             path = reshape(T.(sin.(1:prod(shape))), shape)
             ws = LogSigWorkspace(path, 3; method)
@@ -32,7 +32,7 @@
         end
         empty_path = zeros(T, 2, 3, 0)
         @test log_sig!(LogSigWorkspace(empty_path, 3; method), empty_path) == log_sig(empty_path, 3; method)
-        if method != 3
+        if method != LogSigMethod.DirectBCH
             point = reshape(T[0.2, -0.3], 2, 1)
             @test log_sig!(LogSigWorkspace(point, 3; method), point) ≈ log_sig(point, 3; method)
         end
@@ -45,7 +45,7 @@
     @test_throws ArgumentError log_sig!(ws, Float32.(path))
     @test_throws ArgumentError log_sig!(ws, path; n_jobs=0)
     @test_throws ArgumentError LogSigWorkspace(path, -1)
-    @test_throws ArgumentError LogSigWorkspace(path, 3; method=4)
+    @test_throws TypeError LogSigWorkspace(path, 3; method=4)
     @test_throws ArgumentError LogSigWorkspace(zeros(2, 0), 3)
     @test_throws ArgumentError LogSigWorkspace(zeros(0, 3), 3)
     @test_throws ArgumentError LogSigWorkspace(zeros(3), 3)
@@ -57,7 +57,7 @@ end
         log_sig!(ws, path)
         return @allocated log_sig!(ws, path)
     end
-    for T in (Float32, Float64), method in 0:3
+    for T in (Float32, Float64), method in instances(LogSigMethod.T)
         path = reshape(T.(sin.(1:384)), 3, 32, 4)
         ws = LogSigWorkspace(path, 5; method)
         allocated_call(ws, path)
@@ -67,10 +67,10 @@ end
 
 @testset "workspace cache concurrency" begin
     path = reshape(sin.(1:120), 6, 5, 4)
-    expected = log_sig(path, 3; method=2)
+    expected = log_sig(path, 3; method=LogSigMethod.LyndonBasis)
     tasks = map(1:4) do _
         Threads.@spawn begin
-            ws = LogSigWorkspace(path, 3; method=2)
+            ws = LogSigWorkspace(path, 3; method=LogSigMethod.LyndonBasis)
             for _ in 1:8
                 clear_log_sig_cache()
                 yield()

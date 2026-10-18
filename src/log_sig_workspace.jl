@@ -1,7 +1,7 @@
 """
-    LogSigWorkspace(path, degree; method=1)
+    LogSigWorkspace(path, degree; method=LogSigMethod.LyndonWords)
 
-Allocate reusable CPU or CUDA buffers for [`log_sig!`](@ref). Inputs must have the same shape, backend, and `Float32` or `Float64` element type as `path`. Methods 0–3 are supported, without time augmentation, lead-lag, corrections, or a scalar term.
+Allocate reusable CPU or CUDA buffers for [`log_sig!`](@ref). Inputs must have the same shape, backend, and `Float32` or `Float64` element type as `path`. All [`LogSigMethod`](@ref) values are supported, without time augmentation, lead-lag, corrections, or a scalar term.
 
 The workspace owns its output, which is overwritten on each call. Use a separate workspace for each concurrent computation.
 """
@@ -11,19 +11,18 @@ struct LogSigWorkspace{T,N,A<:AbstractMatrix{T},R<:AbstractArray{T}}
     result::R
     path_shape::NTuple{N,Int}
     degree::Int
-    method::Int
+    method::LogSigMethod.T
 end
 
-function LogSigWorkspace(path::AbstractArray{T,N}, degree::Integer; method::Integer=1) where {T<:Real,N}
+function LogSigWorkspace(path::AbstractArray{T,N}, degree::Integer; method::LogSigMethod.T=LogSigMethod.LyndonWords) where {T<:Real,N}
     degree >= 0 || throw(ArgumentError("degree must be nonnegative"))
-    _as_log_sig_method(method)
     path_c, batch_shape, batch, dim, _ = _path_buffer(path, :log_sig!)
-    siglen = method == 3 ? 0 : sig_length(dim, degree)
+    siglen = method == LogSigMethod.DirectBCH ? 0 : sig_length(dim, degree)
     outlen = _log_sig_output_length(dim, degree, method, false)
     signature = _allocate(path_c, siglen, batch)
     logarithm = _allocate(path_c, outlen, batch)
     return LogSigWorkspace(signature, logarithm, _format_signature_output(logarithm, batch_shape),
-        size(path), Int(degree), Int(method))
+        size(path), Int(degree), method)
 end
 
 """
@@ -43,11 +42,11 @@ function log_sig!(ws::LogSigWorkspace{T}, path::AbstractArray; n_jobs::Integer=1
     path_c, _, batch, dim, len = _path_buffer(path, :log_sig!)
     _with_array(path_c) do
         lock(_cache_lock) do
-            if ws.method != 0
+            if ws.method != LogSigMethod.Expanded
                 # Recheck preparation so clearing the native cache remains safe.
-                _cache_call(Val(_backend(path_c)), Val(:prepare_log_sig), UInt64(dim), UInt64(ws.degree), Cint(ws.method), false)
+                _cache_call(Val(_backend(path_c)), Val(:prepare_log_sig), UInt64(dim), UInt64(ws.degree), ws.method, false)
             end
-            if ws.method == 3
+            if ws.method == LogSigMethod.DirectBCH
                 _log_sig_from_path_c!(ws.logarithm, path_c, batch, len, dim, ws.degree, n_jobs)
             else
                 _signature_c!(ws.signature, path_c, batch, dim, len, ws.degree,

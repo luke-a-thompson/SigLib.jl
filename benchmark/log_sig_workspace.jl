@@ -11,12 +11,12 @@ function investigate(degree)
     signature = SigLib._cpsig_symbol(:signature_d)
     convert = SigLib._cpsig_symbol(:sig_to_log_sig_d)
     native = n -> native_repeat_julia(C_NULL, signature, convert, path,
-        ws.logarithm, ws.signature, 4, 32, 3, degree, 1, n)
+        ws.logarithm, ws.signature, 4, 32, 3, degree, LogSigMethod.LyndonWords, n)
     variants = (
         "log_sig" => (() -> log_sig(path, degree)),
         "log_sig!" => (() -> log_sig!(ws, path)),
         "bare_ccall" => (() -> raw_call!(C_NULL, signature, convert,
-            path, ws.logarithm, ws.signature, 4, 32, 3, degree, 1)),
+            path, ws.logarithm, ws.signature, 4, 32, 3, degree, LogSigMethod.LyndonWords)),
     )
     for (_, f) in variants
         for _ in 1:100
@@ -52,7 +52,7 @@ end
 
 if abspath(PROGRAM_FILE) == @__FILE__
     println("# Julia ", VERSION, "; cpSIG library: ", NATIVE_LIBRARY)
-    println("# Float64 paths=(3,32,4), method=1, n_jobs=1; warmed; 21 rotated samples of approximately 50ms per variant")
+    println("# Float64 paths=(3,32,4), method=LogSigMethod.LyndonWords, n_jobs=1; warmed; 21 rotated samples of approximately 50ms per variant")
     println("# Workspace results reuse storage and are overwritten on each call; a workspace must not be used concurrently.")
     println("degree,variant,median_us,paired_overhead_us,paired_overhead_pct,julia_alloc_bytes")
     investigate(4)

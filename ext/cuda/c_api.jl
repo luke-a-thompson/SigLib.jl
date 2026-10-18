@@ -36,28 +36,28 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         function SigLib._sig_to_log_sig_c!(out::CuArray{$T,2}, sig::CuArray{$T,2}, batch, d, n, ta, ll, method, scalar, jobs)
             _native($(QuoteNode(Symbol(:sig_to_log_sig_cuda_, suffix))), out, sig) do symbol
                 ccall(symbol, Cint, (CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, Cint, Bool),
-                    sig, out, batch, SigLib._effective_dimension(d, ta, ll), n, method, scalar)
+                    sig, out, batch, SigLib._effective_dimension(d, ta, ll), n, Cint(method), scalar)
             end
             return out
         end
         function SigLib._sig_to_log_sig_backprop_c!(out::CuArray{$T,2}, sig::CuArray{$T,2}, derivs::CuArray{$T,2}, batch, d, n, ta, ll, method, scalar, jobs)
             _native($(QuoteNode(Symbol(:sig_to_log_sig_backprop_cuda_, suffix))), out, sig, derivs) do symbol
                 ccall(symbol, Cint, (CuPtr{$T}, CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, Cint, Bool),
-                    sig, out, derivs, batch, SigLib._effective_dimension(d, ta, ll), n, method, scalar)
+                    sig, out, derivs, batch, SigLib._effective_dimension(d, ta, ll), n, Cint(method), scalar)
             end
             return out
         end
         function SigLib._logsig_to_sig_c!(out::CuArray{$T,2}, log::CuArray{$T,2}, batch, d, n, ta, ll, method, scalar, jobs)
             _native($(QuoteNode(Symbol(:logsig_to_sig_cuda_, suffix))), out, log) do symbol
                 ccall(symbol, Cint, (CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, Cint, Bool),
-                    log, out, batch, SigLib._effective_dimension(d, ta, ll), n, method, scalar)
+                    log, out, batch, SigLib._effective_dimension(d, ta, ll), n, Cint(method), scalar)
             end
             return out
         end
         function SigLib._logsig_to_sig_backprop_c!(out::CuArray{$T,2}, log::CuArray{$T,2}, derivs::CuArray{$T,2}, batch, d, n, ta, ll, method, scalar, jobs)
             _native($(QuoteNode(Symbol(:logsig_to_sig_backprop_cuda_, suffix))), out, log, derivs) do symbol
                 ccall(symbol, Cint, (CuPtr{$T}, CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, Cint, Bool),
-                    log, out, derivs, batch, SigLib._effective_dimension(d, ta, ll), n, method, scalar)
+                    log, out, derivs, batch, SigLib._effective_dimension(d, ta, ll), n, Cint(method), scalar)
             end
             return out
         end
@@ -125,15 +125,15 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
             end
             return out1, out2
         end
-        function SigLib._branched_sig_to_log_sig_c!(out::CuArray{$T,2}, sig::CuArray{$T,2}, batch, d, n, planar, scalar, jobs, method=0)
+        function SigLib._branched_sig_to_log_sig_c!(out::CuArray{$T,2}, sig::CuArray{$T,2}, batch, d, n, planar, scalar, jobs, method::BranchedLogSigMethod.T=BranchedLogSigMethod.Expanded)
             _native($(QuoteNode(Symbol(:branched_sig_to_log_sig_cuda_, suffix))), out, sig) do symbol
-                ccall(symbol, Cint, (CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, Cint, Bool, Bool), sig, out, batch, d, n, method, planar, scalar)
+                ccall(symbol, Cint, (CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, Cint, Bool, Bool), sig, out, batch, d, n, Cint(method), planar, scalar)
             end
             return out
         end
-        function SigLib._branched_sig_to_log_sig_backprop_c!(out::CuArray{$T,2}, sig::CuArray{$T,2}, derivs::CuArray{$T,2}, batch, d, n, planar, scalar, jobs, method=0)
+        function SigLib._branched_sig_to_log_sig_backprop_c!(out::CuArray{$T,2}, sig::CuArray{$T,2}, derivs::CuArray{$T,2}, batch, d, n, planar, scalar, jobs, method::BranchedLogSigMethod.T=BranchedLogSigMethod.Expanded)
             _native($(QuoteNode(Symbol(:branched_sig_to_log_sig_backprop_cuda_, suffix))), out, sig, derivs) do symbol
-                ccall(symbol, Cint, (CuPtr{$T}, CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, Cint, Bool, Bool), sig, derivs, out, batch, d, n, method, planar, scalar)
+                ccall(symbol, Cint, (CuPtr{$T}, CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, Cint, Bool, Bool), sig, derivs, out, batch, d, n, Cint(method), planar, scalar)
             end
             return out
         end

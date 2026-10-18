@@ -17,7 +17,7 @@ function SigLib._check_backend(like::AnyCuArray, x::AnyCuArray)
 end
 
 function SigLib._validate_branched_log_sig_degree(::AnyCuArray, degree, method)
-    method == 3 && degree > 20 && throw(ArgumentError("CUDA branched BCH supports degree at most 20"))
+    method == BranchedLogSigMethod.DirectBCH && degree > 20 && throw(ArgumentError("CUDA branched BCH supports degree at most 20"))
     return nothing
 end
 
@@ -70,7 +70,7 @@ function SigLib._cache_call(::Val{:cuda}, ::Val{:clear_cache}, use_disk)
 end
 function SigLib._cache_call(::Val{:cuda}, ::Val{:prepare_log_sig}, d, n, m, use_disk)
     _native(:prepare_log_sig_cuda) do symbol
-        ccall(symbol, Cint, (UInt64, UInt64, Cint, Bool), d, n, m, use_disk)
+        ccall(symbol, Cint, (UInt64, UInt64, Cint, Bool), d, n, Cint(m), use_disk)
     end
 end
 function SigLib._cache_call(::Val{:cuda}, ::Val{:prepare_branched_sig}, d, n, planar, use_disk)
@@ -80,7 +80,7 @@ function SigLib._cache_call(::Val{:cuda}, ::Val{:prepare_branched_sig}, d, n, pl
 end
 function SigLib._cache_call(::Val{:cuda}, ::Val{:prepare_branched_log_sig}, d, n, m, planar, use_disk)
     _native(:prepare_branched_log_sig_cuda) do symbol
-        ccall(symbol, Cint, (UInt64, UInt64, Cint, Bool, Bool), d, n, m, planar, use_disk)
+        ccall(symbol, Cint, (UInt64, UInt64, Cint, Bool, Bool), d, n, Cint(m), planar, use_disk)
     end
 end
 

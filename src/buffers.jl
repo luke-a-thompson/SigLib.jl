@@ -18,14 +18,10 @@ function _effective_dimension(dimension::Integer, time_aug::Bool, lead_lag::Bool
     return time_aug ? Base.checked_add(d, UInt64(1)) : d
 end
 
-function _as_log_sig_method(method::Integer, name::AbstractString="method")
-    0 <= method <= 3 || throw(ArgumentError("$name must be one of 0, 1, 2, or 3"))
-    return Cint(method)
-end
-
-function _as_cached_log_sig_method(method::Integer, name::AbstractString="method")
-    0 <= method <= 2 || throw(ArgumentError("$name must be one of 0, 1, or 2"))
-    return Cint(method)
+function _validate_log_sig_conversion_method(method::LogSigMethod.T)
+    method == LogSigMethod.DirectBCH && throw(ArgumentError(
+        "LogSigMethod.DirectBCH requires log_sig(path, degree) or LogSigWorkspace"))
+    return nothing
 end
 
 _storage_eltype(::Type{Float32}, ::Symbol) = Float32
@@ -88,7 +84,7 @@ function _correction_buffer(correction, like, batch_shape, batch_size, dimension
 end
 
 function _validate_bch_correction(correction::_CorrectionBuffer, function_name::Symbol)
-    correction.length == 0 || throw(ArgumentError("correction is not supported with $function_name method=3"))
+    correction.length == 0 || throw(ArgumentError("correction is not supported with $function_name using DirectBCH"))
     return nothing
 end
 

@@ -6,15 +6,17 @@
 using SigLib
 path = [0.0 0.5 1.0; 0.0 1.0 -0.25] # (dimension, length)
 sig(path, 2)
-log_sig(path, 2; method=2)
-workspace = LogSigWorkspace(path, 2; method=2)
+log_sig(path, 2; method=LogSigMethod.LyndonBasis)
+workspace = LogSigWorkspace(path, 2; method=LogSigMethod.LyndonBasis)
 log_sig!(workspace, path) # reuse buffers for subsequent paths of the same shape
 branched_sig(path, 2)
 sig(path, 3; correction=[-0.01, 0.0, 0.0, -0.01]) # local level-2 correction
-lyndon_brackets(2, 3) # standard brackets in method-2/3 coordinate order
+lyndon_brackets(2, 3) # standard brackets in LyndonBasis/DirectBCH coordinate order
 trees(2, 3) # BCK trees; planar=true gives MKW ordered forests
-branched_log_sig_basis(2, 3; planar=true, method=2) # compressed MKW brackets
+branched_log_sig_basis(2, 3; planar=true, method=BranchedLogSigMethod.MkwBasis) # compressed MKW brackets
 ```
+
+Methods use scoped enum values: `LogSigMethod.Expanded`, `.LyndonWords` (default), `.LyndonBasis`, or `.DirectBCH`. Branched logs use `BranchedLogSigMethod.Expanded`, `.MkwWords`, `.MkwBasis`, or `.DirectBCH`; the default is `Expanded` for nonplanar paths and `MkwWords` for planar paths.
 
 ## Documentation
 

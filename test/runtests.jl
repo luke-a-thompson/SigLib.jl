@@ -2,6 +2,7 @@ using SigLib
 using Test
 
 include("c_api_tests.jl")
+include("log_sig_methods_tests.jl")
 include("signatures_tests.jl")
 include("log_signatures_tests.jl")
 include("log_sig_workspace_tests.jl")

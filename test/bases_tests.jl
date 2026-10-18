@@ -109,42 +109,42 @@ end
 
 @testset "coordinate bases agree with native logarithms" begin
     path = [0.0 0.2 0.7 0.5; 0.0 -0.3 0.4 0.8]
-    @test log_sig_basis(2, 3; method=1) == lyndon_words(2, 3)
-    @test log_sig_basis(2, 3; method=3, scalar_term=true) == lyndon_brackets(2, 3)
-    @test log_sig_basis(2, 0; method=0, scalar_term=true) == [()]
+    @test log_sig_basis(2, 3; method=LogSigMethod.LyndonWords) == lyndon_words(2, 3)
+    @test log_sig_basis(2, 3; method=LogSigMethod.DirectBCH, scalar_term=true) == lyndon_brackets(2, 3)
+    @test log_sig_basis(2, 0; method=LogSigMethod.Expanded, scalar_term=true) == [()]
     @test isempty(log_sig_basis(2, 0))
-    @test_throws ArgumentError log_sig_basis(2, 3; method=4)
-    @test_throws ArgumentError branched_log_sig_basis(2, 3; method=1)
-    @test_throws ArgumentError branched_log_sig_basis(2, 3; planar=true, method=-1)
+    @test_throws TypeError log_sig_basis(2, 3; method=4)
+    @test_throws ArgumentError branched_log_sig_basis(2, 3; method=BranchedLogSigMethod.MkwWords)
+    @test_throws TypeError branched_log_sig_basis(2, 3; planar=true, method=-1)
     @test branched_log_sig_basis(2, 3) == BCK_BASIS_2_3[2:end]
-    @test branched_log_sig_basis(2, 3; method=0, scalar_term=true) == BCK_BASIS_2_3
-    @test branched_log_sig_basis(2, 3; planar=true, method=0) == MKW_BASIS_2_3[2:end]
+    @test branched_log_sig_basis(2, 3; method=BranchedLogSigMethod.Expanded, scalar_term=true) == BCK_BASIS_2_3
+    @test branched_log_sig_basis(2, 3; planar=true, method=BranchedLogSigMethod.Expanded) == MKW_BASIS_2_3[2:end]
     @test branched_log_sig_basis(2, 2; planar=true) ==
         Any[((0,),), ((1,),), ((0,), (1,)), (((0,), 0),), (((0,), 1),), (((1,), 0),), (((1,), 1),)]
-    for planar in (false, true), method in (planar ? (0:3) : (0:0))
+    for planar in (false, true), method in (planar ? instances(BranchedLogSigMethod.T) : (BranchedLogSigMethod.Expanded,))
         @test isempty(branched_log_sig_basis(0, 3; planar=planar, method=method))
         @test isempty(branched_log_sig_basis(2, 0; planar=planar, method=method))
     end
     for degree in 2:5
-        coefficients = log_sig(path, degree; method=2)
+        coefficients = log_sig(path, degree; method=LogSigMethod.LyndonBasis)
         expanded = zeros(sig_length(2, degree))
-        for (coefficient, expr) in zip(coefficients, log_sig_basis(2, degree; method=2))
+        for (coefficient, expr) in zip(coefficients, log_sig_basis(2, degree; method=LogSigMethod.LyndonBasis))
             for (word, multiplicity) in expand_basis_bracket(expr)
                 expanded[word_to_idx(word, 2)] += coefficient * multiplicity
             end
         end
-        @test expanded ≈ log_sig(path, degree; method=0) atol=1e-12
-        tensorlog = log_sig(path, degree; method=0)
-        selected = [word_to_idx(w, 2) for w in log_sig_basis(2, degree; method=1)]
-        @test tensorlog[selected] ≈ log_sig(path, degree; method=1)
+        @test expanded ≈ log_sig(path, degree; method=LogSigMethod.Expanded) atol=1e-12
+        tensorlog = log_sig(path, degree; method=LogSigMethod.Expanded)
+        selected = [word_to_idx(w, 2) for w in log_sig_basis(2, degree; method=LogSigMethod.LyndonWords)]
+        @test tensorlog[selected] ≈ log_sig(path, degree; method=LogSigMethod.LyndonWords)
     end
     if SigLib._modern_abi[]
         for degree in 2:4
-            extracted = branched_log_sig_basis(2, degree; planar=true, method=1)
-            bracketed = branched_log_sig_basis(2, degree; planar=true, method=2)
+            extracted = branched_log_sig_basis(2, degree; planar=true, method=BranchedLogSigMethod.MkwWords)
+            bracketed = branched_log_sig_basis(2, degree; planar=true, method=BranchedLogSigMethod.MkwBasis)
             @test length(bracketed) == branched_log_sig_length(2, degree; planar=true)
-            @test bracketed == branched_log_sig_basis(2, degree; planar=true, method=3)
-            coefficients = branched_log_sig(path, degree; planar=true, method=2)
+            @test bracketed == branched_log_sig_basis(2, degree; planar=true, method=BranchedLogSigMethod.DirectBCH)
+            coefficients = branched_log_sig(path, degree; planar=true, method=BranchedLogSigMethod.MkwBasis)
             expanded = zeros(branched_sig_length(2, degree; planar=true))
             for (coefficient, expr) in zip(coefficients, bracketed)
                 for (forest, multiplicity) in expand_basis_bracket(expr)
@@ -152,9 +152,9 @@ end
                 end
             end
             selected = [tree_to_idx(f, 2, degree; planar=true) for f in extracted]
-            method1 = branched_log_sig(path, degree; planar=true, method=1)
+            method1 = branched_log_sig(path, degree; planar=true, method=BranchedLogSigMethod.MkwWords)
             @test expanded[selected] ≈ method1 atol=1e-12
-            hopflog = branched_log_sig(path, degree; planar=true, method=0)
+            hopflog = branched_log_sig(path, degree; planar=true, method=BranchedLogSigMethod.Expanded)
             @test hopflog[selected] ≈ method1 atol=1e-12
         end
     end

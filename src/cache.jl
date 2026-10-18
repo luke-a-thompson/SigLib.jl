@@ -19,9 +19,9 @@ function _cache_call(::Val{:cpu}, ::Val{:clear_cache}, use_disk)
 end
 function _cache_call(::Val{:cpu}, ::Val{:prepare_log_sig}, d, n, m, use_disk)
     # 3.1's direct method uses implicit BCH preparation; method 3 corrupts its basis cache.
-    !_modern_abi[] && m == 3 && (m = Cint(2))
+    !_modern_abi[] && m == LogSigMethod.DirectBCH && (m = LogSigMethod.LyndonBasis)
     _prepare_cache_directory(use_disk)
-    check_status(ccall(_cpsig_symbol(:prepare_log_sig), Cint, (UInt64, UInt64, Cint, Bool), d, n, m, use_disk), :prepare_log_sig)
+    check_status(ccall(_cpsig_symbol(:prepare_log_sig), Cint, (UInt64, UInt64, Cint, Bool), d, n, Cint(m), use_disk), :prepare_log_sig)
 end
 function _cache_call(::Val{:cpu}, ::Val{:prepare_branched_sig}, d, n, planar, use_disk)
     _prepare_cache_directory(use_disk)
@@ -29,7 +29,7 @@ function _cache_call(::Val{:cpu}, ::Val{:prepare_branched_sig}, d, n, planar, us
 end
 function _cache_call(::Val{:cpu}, ::Val{:prepare_branched_log_sig}, d, n, m, planar, use_disk)
     if _modern_abi[]
-        check_status(ccall(_cpsig_symbol(:prepare_branched_log_sig), Cint, (UInt64, UInt64, Cint, Bool, Bool), d, n, m, use_disk, planar), :prepare_branched_log_sig)
+        check_status(ccall(_cpsig_symbol(:prepare_branched_log_sig), Cint, (UInt64, UInt64, Cint, Bool, Bool), d, n, Cint(m), use_disk, planar), :prepare_branched_log_sig)
     else
         d != 0 && _cache_call(Val(:cpu), Val(:prepare_branched_sig), d, n, planar, use_disk)
     end
@@ -69,19 +69,18 @@ end
 """
     prepare_log_sig(dimension, degree, method; time_aug=false, lead_lag=false, use_disk=false, device=:cpu)
 
-Prepare the native log-signature cache. Methods 0–3 select tensor, extracted Lyndon coordinates, Lyndon basis coordinates, and direct BCH computations respectively. High-level functions prepare their caches automatically on the input device.
+Prepare the native log-signature cache. Choose a [`LogSigMethod`](@ref) value. High-level functions prepare their caches automatically on the input device.
 """
 function prepare_log_sig(
-    dimension::Integer, degree::Integer, method::Integer;
+    dimension::Integer, degree::Integer, method::LogSigMethod.T;
     time_aug::Bool=false, lead_lag::Bool=false, use_disk::Bool=false, device::Symbol=:cpu,
 )
     d = _as_uint64(_effective_dimension(dimension, time_aug, lead_lag), "dimension")
     n = _as_uint64(degree, "degree")
-    m = _as_log_sig_method(method)
-    (m == 0 || n == 0) && return nothing
+    (method == LogSigMethod.Expanded || n == 0) && return nothing
     log_sig_length(d, n)
     lock(_cache_lock) do
-        _cache_call(Val(device), Val(:prepare_log_sig), d, n, m, use_disk)
+        _cache_call(Val(device), Val(:prepare_log_sig), d, n, method, use_disk)
     end
     return nothing
 end
@@ -89,18 +88,18 @@ end
 """
     prepare_branched_log_sig(dimension, degree, method; time_aug=false, lead_lag=false, planar=false, use_disk=false, device=:cpu)
 
-Prepare branched-log-signature caches. Methods 1–3 require `planar=true` and a 4.x native artifact. High-level functions prepare automatically on the input device.
+Prepare branched-log-signature caches. Choose a [`BranchedLogSigMethod`](@ref) value; all except `Expanded` require `planar=true` and a 4.x native artifact. High-level functions prepare automatically on the input device.
 """
 function prepare_branched_log_sig(
-    dimension::Integer, degree::Integer, method::Integer;
+    dimension::Integer, degree::Integer, method::BranchedLogSigMethod.T;
     time_aug::Bool=false, lead_lag::Bool=false, planar::Bool=false, use_disk::Bool=false, device::Symbol=:cpu,
 )
-    m = _branched_log_sig_method(method, planar)
+    _validate_branched_log_sig_method(method, planar)
     d = _branched_log_sig_dimension(dimension, time_aug, lead_lag)
     n = _as_uint64(degree, "degree")
     d != 0 && branched_sig_length(d, n; planar=planar)
     lock(_cache_lock) do
-        _cache_call(Val(device), Val(:prepare_branched_log_sig), d, n, m, planar, use_disk)
+        _cache_call(Val(device), Val(:prepare_branched_log_sig), d, n, method, planar, use_disk)
     end
     return nothing
 end

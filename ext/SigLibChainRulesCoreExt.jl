@@ -103,7 +103,7 @@ function rrule(
     degree::Integer;
     time_aug::Bool=false,
     lead_lag::Bool=false,
-    method::Integer=1,
+    method::LogSigMethod.T=LogSigMethod.LyndonWords,
     n_jobs::Integer=1,
 ) where {T<:Union{Float32,Float64},N}
     y = SigLib.sig_to_log_sig(
@@ -141,7 +141,7 @@ function rrule(
     degree::Integer;
     time_aug::Bool=false,
     lead_lag::Bool=false,
-    method::Integer=1,
+    method::LogSigMethod.T=LogSigMethod.LyndonWords,
     scalar_term::Bool=false,
     n_jobs::Integer=1,
 ) where {T<:Union{Float32,Float64},N}
@@ -182,17 +182,16 @@ function rrule(
     time_aug::Bool=false,
     lead_lag::Bool=false,
     end_time::Real=1.0,
-    method::Integer=1,
+    method::LogSigMethod.T=LogSigMethod.LyndonWords,
     scalar_term::Bool=false,
     correction=nothing,
     n_jobs::Integer=1,
 ) where {T<:Union{Float32,Float64},N}
-    SigLib._as_log_sig_method(method)
-    if method != 3
+    if method != LogSigMethod.DirectBCH
         sig_value, sig_pullback = rrule(
             SigLib.sig, path, degree;
             time_aug=time_aug, lead_lag=lead_lag, end_time=end_time,
-            scalar_term=method == 0 && scalar_term, correction=correction, n_jobs=n_jobs,
+            scalar_term=method == LogSigMethod.Expanded && scalar_term, correction=correction, n_jobs=n_jobs,
         )
         y, convert_pullback = rrule(
             SigLib.sig_to_log_sig, sig_value, size(path, 1), degree;
@@ -305,7 +304,7 @@ function rrule(
     time_aug::Bool=false,
     lead_lag::Bool=false,
     planar::Bool=false,
-    method::Union{Nothing,Integer}=nothing,
+    method::BranchedLogSigMethod.T=planar ? BranchedLogSigMethod.MkwWords : BranchedLogSigMethod.Expanded,
     n_jobs::Integer=1,
 ) where {T<:Union{Float32,Float64},N}
     y = SigLib.branched_sig_to_log_sig(
@@ -347,15 +346,15 @@ function rrule(
     end_time::Real=1.0,
     planar::Bool=false,
     scalar_term::Bool=false,
-    method::Union{Nothing,Integer}=nothing,
+    method::BranchedLogSigMethod.T=planar ? BranchedLogSigMethod.MkwWords : BranchedLogSigMethod.Expanded,
     correction=nothing,
     n_jobs::Integer=1,
 ) where {T<:Union{Float32,Float64},N}
-    m = SigLib._branched_log_sig_method(method, planar)
-    if m == 3
+    SigLib._validate_branched_log_sig_method(method, planar)
+    if method == BranchedLogSigMethod.DirectBCH
         y = SigLib.branched_log_sig(path, degree;
             time_aug=time_aug, lead_lag=lead_lag, end_time=end_time, planar=planar,
-            scalar_term=scalar_term, method=m, correction=correction, n_jobs=n_jobs)
+            scalar_term=scalar_term, method=method, correction=correction, n_jobs=n_jobs)
         project_path = ProjectTo(path)
         function direct_pullback(ybar)
             ybar = unthunk(ybar)
@@ -382,7 +381,7 @@ function rrule(
         time_aug=time_aug,
         lead_lag=lead_lag,
         planar=planar,
-        method=m,
+        method=method,
         n_jobs=n_jobs,
     )
     return y, ybar -> sig_pullback(convert_pullback(ybar)[2])

@@ -36,7 +36,7 @@ end
             for scalar_term in (false, true)
                 parity(sig, path, 3; options..., scalar_term)
                 parity(sig, path, 3; options..., scalar_term, horner=false)
-                for method in 0:2
+                for method in (LogSigMethod.Expanded, LogSigMethod.LyndonWords, LogSigMethod.LyndonBasis)
                     s = sig(path, 3; options..., scalar_term)
                     l = log_sig(path, 3; options..., scalar_term, method)
                     parity(log_sig, path, 3; options..., scalar_term, method)
@@ -46,17 +46,17 @@ end
                 for planar in (false, true)
                     parity(branched_sig, path, 3; options..., planar, scalar_term)
                     b = branched_sig(path, 3; options..., planar, scalar_term)
-                    for method in (planar ? (0:2) : (0:0))
+                    for method in (planar ? (BranchedLogSigMethod.Expanded, BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis) : (BranchedLogSigMethod.Expanded,))
                         parity(branched_log_sig, path, 3; options..., planar, scalar_term, method)
                         parity(branched_sig_to_log_sig, b, 2, 3; time_aug, lead_lag, planar, method)
                     end
                     parity(branched_sig_combine, b, b, 2, 3; time_aug, lead_lag, planar, scalar_term)
                 end
             end
-            parity(log_sig, path, 3; options..., method=3)
-            parity(branched_log_sig, path, 3; options..., planar=true, method=3)
+            parity(log_sig, path, 3; options..., method=LogSigMethod.DirectBCH)
+            parity(branched_log_sig, path, 3; options..., planar=true, method=BranchedLogSigMethod.DirectBCH)
         end
-        l = log_sig(path, 3; method=2)
+        l = log_sig(path, 3; method=LogSigMethod.LyndonBasis)
         displacement = fill(T(0.2), 2, size(path)[3:end]...)
         parity(log_sig_combine, l, l, 2, 3)
         parity(log_sig_join, l, displacement, 2, 3)
@@ -73,12 +73,12 @@ end
             options = (; correction, time_aug, scalar_term, end_time=0.7)
             parity(sig, path, 3; options...)
             parity(sig, path, 3; options..., horner=false)
-            for method in 0:2
+            for method in (LogSigMethod.Expanded, LogSigMethod.LyndonWords, LogSigMethod.LyndonBasis)
                 parity(log_sig, path, 3; options..., method)
             end
             for planar in (false, true)
                 parity(branched_sig, path, 3; options..., planar)
-                for method in (planar ? (0:2) : (0:0))
+                for method in (planar ? (BranchedLogSigMethod.Expanded, BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis) : (BranchedLogSigMethod.Expanded,))
                     parity(branched_log_sig, path, 3; options..., planar, method)
                 end
             end
@@ -93,8 +93,8 @@ end
     @test_throws ArgumentError sig(gpu, 3; correction=ones(4))
     @test_throws ArgumentError sig(path, 3; correction=CuArray(ones(4)))
     @test_throws ArgumentError sig(gpu, 3; correction=CuArray(ones(4)), lead_lag=true)
-    @test_throws ArgumentError log_sig(gpu, 3; correction=CuArray(ones(4)), method=3)
-    @test_throws ArgumentError branched_log_sig(gpu, 3; correction=CuArray(ones(4)), planar=true, method=3)
+    @test_throws ArgumentError log_sig(gpu, 3; correction=CuArray(ones(4)), method=LogSigMethod.DirectBCH)
+    @test_throws ArgumentError branched_log_sig(gpu, 3; correction=CuArray(ones(4)), planar=true, method=BranchedLogSigMethod.DirectBCH)
 end
 
 @testset "CUDA buffers, boundaries and cache lifecycle" begin
@@ -109,14 +109,16 @@ end
         parity(f, zeros(2, 1), 3)
     end
     @test Array(sig(gpu .+ 0.1, 3)) ≈ sig(path .+ 0.1, 3)
-    for method in 0:3
+    for method in instances(LogSigMethod.T)
         parity(log_sig, path, 0; method)
+    end
+    for method in instances(BranchedLogSigMethod.T)
         parity(branched_log_sig, path, 0; planar=true, method)
     end
-    mixed = log_sig(Float32.(path), 3; method=2)
+    mixed = log_sig(Float32.(path), 3; method=LogSigMethod.LyndonBasis)
     parity(log_sig_combine, mixed, Float64.(mixed), 2, 3)
     parity(log_sig_join, mixed, fill(0.2, 2, 3), 2, 3)
-    l = log_sig(gpu, 3; method=2)
+    l = log_sig(gpu, 3; method=LogSigMethod.LyndonBasis)
     @test_throws ArgumentError log_sig_combine(l, Array(l), 2, 3)
     @test_throws ArgumentError log_sig_combine(Array(l), l, 2, 3)
     @test_throws ArgumentError log_sig_join(l, zeros(2, 3), 2, 3)
@@ -124,22 +126,22 @@ end
     @test_throws TypeError sig(CuArray(ones(Int, 2, 4)), 3)
     @test_throws ArgumentError sig(gpu, 3; correction=CuArray(ones(1)))
     @test_throws ArgumentError clear_log_sig_cache(; device=:unknown)
-    @test_throws ArgumentError branched_log_sig(gpu, 21; planar=true, method=3)
-    @test_throws SigLibError prepare_branched_log_sig(2, 21, 3; planar=true, device=:cuda)
+    @test_throws ArgumentError branched_log_sig(gpu, 21; planar=true, method=BranchedLogSigMethod.DirectBCH)
+    @test_throws SigLibError prepare_branched_log_sig(2, 21, BranchedLogSigMethod.DirectBCH; planar=true, device=:cuda)
     clear_log_sig_cache(; device=:both)
-    @test Array(log_sig(gpu, 3; method=2)) ≈ log_sig(path, 3; method=2)
+    @test Array(log_sig(gpu, 3; method=LogSigMethod.LyndonBasis)) ≈ log_sig(path, 3; method=LogSigMethod.LyndonBasis)
     mktempdir() do directory
         set_cache_dir(directory; device=:both)
-        prepare_log_sig(2, 3, 2; use_disk=true, device=:both)
+        prepare_log_sig(2, 3, LogSigMethod.LyndonBasis; use_disk=true, device=:both)
         prepare_branched_sig(2, 3; use_disk=true, device=:both)
-        prepare_branched_log_sig(2, 3, 2; planar=true, use_disk=true, device=:both)
+        prepare_branched_log_sig(2, 3, BranchedLogSigMethod.MkwBasis; planar=true, use_disk=true, device=:both)
         clear_log_sig_cache(; use_disk=true, device=:both)
     end
-    expected = log_sig(path, 3; method=3)
+    expected = log_sig(path, 3; method=LogSigMethod.DirectBCH)
     tasks = [Threads.@spawn begin
         for _ in 1:3
             clear_log_sig_cache(; device=:cuda)
-            @test Array(log_sig(gpu, 3; method=3)) ≈ expected
+            @test Array(log_sig(gpu, 3; method=LogSigMethod.DirectBCH)) ≈ expected
             GC.gc()
         end
     end for _ in 1:3]
@@ -150,7 +152,7 @@ if length(collect(CUDA.devices())) > 1
     @testset "CUDA input context overrides the active device" begin
         path = [0.0 0.3 -0.1; 0.0 -0.2 0.5]
         first_device = CuArray(path)
-        l = log_sig(first_device, 3; method=2)
+        l = log_sig(first_device, 3; method=LogSigMethod.LyndonBasis)
         CUDA.device!(collect(CUDA.devices())[2]) do
             active = CUDA.context()
             result = sig(first_device, 3)
@@ -164,7 +166,7 @@ if length(collect(CUDA.devices())) > 1
 end
 
 @testset "CUDA batch-last storage and workspace" begin
-    for T in (Float32, Float64), method in 0:3
+    for T in (Float32, Float64), method in instances(LogSigMethod.T)
         host = reshape(T.(sin.(1:120) ./ 4), 2, 5, 3, 4)
         path = CuArray(host)
         @test pointer(SigLib._path_buffer(path)[1]) == pointer(path)

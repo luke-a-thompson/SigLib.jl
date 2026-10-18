@@ -24,7 +24,7 @@ for T in (Float32, Float64)
     @eval function native_repeat_julia(direct, signature, convert, prepare, packed::CuArray{$T,3}, out, sig_buffer, batch, len, dim, degree, method, matched_checks, n)
         ns = ccall(REPEAT, Float64,
             (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, CuPtr{$T}, CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, UInt64, Cint, Cint, Cint, UInt64),
-            direct, signature, convert, prepare, packed, out, sig_buffer, batch, len, dim, degree, method, $T == Float32, matched_checks, n)
+            direct, signature, convert, prepare, packed, out, sig_buffer, batch, len, dim, degree, Cint(method), $T == Float32, matched_checks, n)
         if ns < 0
             detail = unsafe_string(ccall(EXT._last_error[], Cstring, ()))
             error("native CUDA benchmark failed with status $(-ns): $detail")
@@ -32,7 +32,7 @@ for T in (Float32, Float64)
         return ns
     end
     @eval function raw_call!(direct, signature, convert, packed::CuArray{$T,3}, out, sig_buffer, batch, len, dim, degree, method)
-        if method == 3
+        if method == LogSigMethod.DirectBCH
             rc = ccall(direct, Cint, (CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, UInt64), packed, out, batch, len, dim, degree)
         else
             rc = ccall(signature, Cint,
@@ -40,7 +40,7 @@ for T in (Float32, Float64)
                 packed, sig_buffer, batch, dim, len, degree, false, false, $T(1), true, false, CuPtr{$T}(0), 0, 0, 0)
             rc == 0 || error("native signature failed: $rc")
             rc = ccall(convert, Cint, (CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, Cint, Bool),
-                sig_buffer, out, batch, dim, degree, method, false)
+                sig_buffer, out, batch, dim, degree, Cint(method), false)
         end
         rc == 0 || error("native log signature failed: $rc")
         CUDA.device_synchronize()
@@ -48,12 +48,12 @@ for T in (Float32, Float64)
     end
 end
 
-function compare(::Type{T}, batch, len, dim, degree, method; samples=15) where T
+function compare(::Type{T}, batch, len, dim, degree, method::LogSigMethod.T; samples=15) where T
     host = permutedims(rand(MersenneTwister(1), T, batch, len, dim) .* T(0.2) .- T(0.1), (3, 2, 1))
     path = CuArray(host)
     packed = path
     out = CuArray{T}(undef, log_sig_length(dim, degree), batch)
-    sig_buffer = CuArray{T}(undef, method == 3 ? 0 : sig_length(dim, degree), batch)
+    sig_buffer = CuArray{T}(undef, method == LogSigMethod.DirectBCH ? 0 : sig_length(dim, degree), batch)
     prepare_log_sig(dim, degree, method; device=:cuda)
     library = EXT._library()
     suffix = T == Float32 ? "f" : "d"
@@ -68,8 +68,8 @@ function compare(::Type{T}, batch, len, dim, degree, method; samples=15) where T
         result
     end
     wrapped_call = () -> begin
-        if method == 3
-            SigLib._prepare_log_sig_for(packed, dim, degree, 3)
+        if method == LogSigMethod.DirectBCH
+            SigLib._prepare_log_sig_for(packed, dim, degree, LogSigMethod.DirectBCH)
             SigLib._log_sig_from_path_c!(out, packed, batch, len, dim, degree, 1)
         else
             SigLib._signature_c!(sig_buffer, packed, batch, dim, len, degree, false, false, true, false, 1, one(T))
@@ -122,12 +122,12 @@ function compare(::Type{T}, batch, len, dim, degree, method; samples=15) where T
     end
     shape = "$(dim)x$(len)x$(batch)"
     c = median(native_times)
-    @printf("%s,%s,%d,%d,native_c,%.6f,0,0,0\n", T, shape, degree, method, c / 1000)
-    @printf("%s,%s,%d,%d,native_c_matched_checks,%.6f,%.6f,%.3f,0\n", T, shape, degree, method, median(matched_times) / 1000,
+    @printf("%s,%s,%d,%d,native_c,%.6f,0,0,0\n", T, shape, degree, Int(method), c / 1000)
+    @printf("%s,%s,%d,%d,native_c_matched_checks,%.6f,%.6f,%.3f,0\n", T, shape, degree, Int(method), median(matched_times) / 1000,
         median(matched_times .- native_times) / 1000, 100 * median(matched_times .- native_times) / c)
     for (i, (name, f)) in enumerate(variants)
         delta = median(measurements[i] .- native_times)
-        @printf("%s,%s,%d,%d,%s,%.6f,%.6f,%.3f,%d\n", T, shape, degree, method, name,
+        @printf("%s,%s,%d,%d,%s,%.6f,%.6f,%.3f,%d\n", T, shape, degree, Int(method), name,
             median(measurements[i]) / 1000, delta / 1000, 100 * delta / c, @allocated(f()))
     end
     flush(stdout)
@@ -141,10 +141,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("# Native C uses preallocated device buffers and synchronizes each completed log-signature call. Matched checks adds Julia's per-native-call barriers and repeated cache preparation.")
     println("# preallocated_wrappers uses existing internal CUDA wrappers; log_sig! uses the public CPU/CUDA workspace.")
     println("dtype,public_shape,degree,method,variant,median_us,paired_overhead_us,paired_overhead_pct,julia_host_alloc_bytes")
-    for degree in (4, 5), method in (1, 3)
+    for degree in (4, 5), method in (LogSigMethod.LyndonWords, LogSigMethod.DirectBCH)
         compare(Float64, 4, 32, 3, degree, method)
     end
-    for method in (1, 3)
+    for method in (LogSigMethod.LyndonWords, LogSigMethod.DirectBCH)
         compare(Float32, 32, 129, 2, 6, method)
         compare(Float32, 256, 129, 2, 6, method)
     end

@@ -107,22 +107,22 @@ end
     )
 
     sig_for_log = sig(path, 2)
-    sig_to_log_value, sig_to_log_pullback = rrule(sig_to_log_sig, sig_for_log, 2, 2; method=2)
+    sig_to_log_value, sig_to_log_pullback = rrule(sig_to_log_sig, sig_for_log, 2, 2; method=LogSigMethod.LyndonBasis)
     sig_to_log_bar = collect(range(0.1, step=0.05, length=length(sig_to_log_value)))
     sig_to_log_tangents = sig_to_log_pullback(sig_to_log_bar)
     @test sig_to_log_tangents[1] isa NoTangent
     @test sig_to_log_tangents[3] isa NoTangent
     @test sig_to_log_tangents[4] isa NoTangent
     _test_pullback_input(
-        x -> sig_to_log_sig(x, 2, 2; method=2),
+        x -> sig_to_log_sig(x, 2, 2; method=LogSigMethod.LyndonBasis),
         sig_for_log,
         sig_to_log_bar,
         sig_to_log_tangents[2],
     )
 
-    logsig_value = log_sig(path, 2; method=2)
+    logsig_value = log_sig(path, 2; method=LogSigMethod.LyndonBasis)
     logsig_to_sig_value, logsig_to_sig_pullback = rrule(
-        logsig_to_sig, logsig_value, 2, 2; method=2,
+        logsig_to_sig, logsig_value, 2, 2; method=LogSigMethod.LyndonBasis,
     )
     logsig_to_sig_bar = collect(range(0.2, step=0.1, length=length(logsig_to_sig_value)))
     logsig_to_sig_tangents = logsig_to_sig_pullback(logsig_to_sig_bar)
@@ -130,13 +130,13 @@ end
     @test logsig_to_sig_tangents[3] isa NoTangent
     @test logsig_to_sig_tangents[4] isa NoTangent
     _test_pullback_input(
-        x -> logsig_to_sig(x, 2, 2; method=2),
+        x -> logsig_to_sig(x, 2, 2; method=LogSigMethod.LyndonBasis),
         logsig_value,
         logsig_to_sig_bar,
         logsig_to_sig_tangents[2],
     )
 
-    for method in (2, 3)
+    for method in (LogSigMethod.LyndonBasis, LogSigMethod.DirectBCH)
         log_value, log_pullback = rrule(log_sig, path, 2; method=method)
         log_bar = collect(range(0.15, step=0.05, length=length(log_value)))
         log_tangents = log_pullback(log_bar)
@@ -151,7 +151,7 @@ end
         )
     end
 
-    other_logsig = log_sig([0.0 0.25 0.5; 0.0 0.5 -0.5], 2; method=2)
+    other_logsig = log_sig([0.0 0.25 0.5; 0.0 0.5 -0.5], 2; method=LogSigMethod.LyndonBasis)
     lcombine_value, lcombine_pullback = rrule(
         log_sig_combine, logsig_value, other_logsig, 2, 2,
     )
@@ -197,27 +197,27 @@ end
 @testset "branched log method pullbacks" begin
     if SigLib._modern_abi[]
         path = [0.0 0.2 0.7 0.5; 0.0 -0.3 0.4 0.8]
-        for method in 0:3, scalar_term in (false, true)
+        for method in instances(BranchedLogSigMethod.T), scalar_term in (false, true)
             options = (; planar=true, method=method, scalar_term=scalar_term)
             y, back = rrule(branched_log_sig, path, 3; options...)
             ybar = collect(range(0.1, 0.3; length=length(y)))
             _test_pullback_input(x -> branched_log_sig(x, 3; options...), path, ybar, back(ybar)[2])
             @test back(ZeroTangent())[2] isa ZeroTangent
         end
-        for method in 1:3, lead_lag in (false, true)
+        for method in (BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis, BranchedLogSigMethod.DirectBCH), lead_lag in (false, true)
             options = (; planar=true, method=method, time_aug=true, lead_lag=lead_lag, end_time=2.0)
             y, back = rrule(branched_log_sig, path, 2; options...)
             ybar = collect(range(0.05, 0.2; length=length(y)))
             _test_pullback_input(x -> branched_log_sig(x, 2; options...), path, ybar, back(ybar)[2])
         end
-        for method in 0:2, scalar_term in (false, true)
+        for method in (BranchedLogSigMethod.Expanded, BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis), scalar_term in (false, true)
             bsig = branched_sig(path, 3; planar=true, scalar_term=scalar_term)
             y, back = rrule(branched_sig_to_log_sig, bsig, 2, 3; planar=true, method=method)
             ybar = collect(range(0.1, 0.3; length=length(y)))
             _test_pullback_input(x -> branched_sig_to_log_sig(x, 2, 3; planar=true, method=method),
                 bsig, ybar, back(ybar)[2])
         end
-        for method in 1:3
+        for method in (BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis, BranchedLogSigMethod.DirectBCH)
             y, back = rrule(branched_log_sig, path, 0; planar=true, method=method, scalar_term=true)
             @test isempty(y)
             @test back(Float64[])[2] == zeros(size(path))

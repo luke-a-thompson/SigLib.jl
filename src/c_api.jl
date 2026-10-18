@@ -106,7 +106,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         degree::Integer,
         time_aug::Bool,
         lead_lag::Bool,
-        method::Integer,
+        method::LogSigMethod.T,
         scalar_term::Bool,
         n_jobs::Integer,
     )
@@ -118,7 +118,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
             _as_uint64(batch_size, "batch_size"),
             _as_uint64(dimension, "dimension"),
             _as_uint64(degree, "degree"),
-            time_aug, lead_lag, _as_cached_log_sig_method(method), scalar_term, _as_cint_n_jobs(n_jobs),
+            time_aug, lead_lag, Cint(method), scalar_term, _as_cint_n_jobs(n_jobs),
         )
         check_status(status, $symbol)
         return out
@@ -136,7 +136,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         degree::Integer,
         time_aug::Bool,
         lead_lag::Bool,
-        method::Integer,
+        method::LogSigMethod.T,
         scalar_term::Bool,
         n_jobs::Integer,
     )
@@ -148,7 +148,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
             _as_uint64(batch_size, "batch_size"),
             _as_uint64(dimension, "dimension"),
             _as_uint64(degree, "degree"),
-            time_aug, lead_lag, _as_cached_log_sig_method(method), scalar_term, _as_cint_n_jobs(n_jobs),
+            time_aug, lead_lag, Cint(method), scalar_term, _as_cint_n_jobs(n_jobs),
         )
         check_status(status, $symbol)
         return out
@@ -165,7 +165,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         degree::Integer,
         time_aug::Bool,
         lead_lag::Bool,
-        method::Integer,
+        method::LogSigMethod.T,
         scalar_term::Bool,
         n_jobs::Integer,
     )
@@ -177,7 +177,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
             _as_uint64(batch_size, "batch_size"),
             _as_uint64(dimension, "dimension"),
             _as_uint64(degree, "degree"),
-            time_aug, lead_lag, _as_cached_log_sig_method(method), scalar_term, _as_cint_n_jobs(n_jobs),
+            time_aug, lead_lag, Cint(method), scalar_term, _as_cint_n_jobs(n_jobs),
         )
         check_status(status, $symbol)
         return out
@@ -195,7 +195,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         degree::Integer,
         time_aug::Bool,
         lead_lag::Bool,
-        method::Integer,
+        method::LogSigMethod.T,
         scalar_term::Bool,
         n_jobs::Integer,
     )
@@ -207,7 +207,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
             _as_uint64(batch_size, "batch_size"),
             _as_uint64(dimension, "dimension"),
             _as_uint64(degree, "degree"),
-            time_aug, lead_lag, _as_cached_log_sig_method(method), scalar_term, _as_cint_n_jobs(n_jobs),
+            time_aug, lead_lag, Cint(method), scalar_term, _as_cint_n_jobs(n_jobs),
         )
         check_status(status, $symbol)
         return out
@@ -459,7 +459,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         planar::Bool,
         scalar_term::Bool,
         n_jobs::Integer,
-        method::Integer,
+        method::BranchedLogSigMethod.T,
     )
         status = if _modern_abi[]
             ccall(
@@ -590,7 +590,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         planar::Bool,
         scalar_term::Bool,
         n_jobs::Integer,
-        method::Integer,
+        method::BranchedLogSigMethod.T,
     )
         status = if _modern_abi[]
             ccall(

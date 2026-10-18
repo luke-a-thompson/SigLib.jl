@@ -86,7 +86,7 @@ end
 """
     lyndon_words(dimension, degree)
 
-Return the labels of ordinary method-1 log coordinates, ordered by length then
+Return the labels of ordinary `LogSigMethod.LyndonWords` coordinates, ordered by length then
 lexicographically. There is no scalar entry.
 """
 function lyndon_words(dimension::Integer, degree::Integer)
@@ -127,7 +127,7 @@ end
 """
     lyndon_brackets(dimension, degree)
 
-Return the standard bracket expressions labelling ordinary method-2/3 log coordinates.
+Return the standard bracket expressions labelling ordinary `LyndonBasis`/`DirectBCH` log coordinates.
 """
 lyndon_brackets(dimension::Integer, degree::Integer) =
     map(lyndon_bracket, lyndon_words(dimension, degree))
@@ -322,48 +322,47 @@ function idx_to_tree(index::Integer, dimension::Integer, degree::Integer;
 end
 
 """
-    log_sig_basis(dimension, degree; method=1, scalar_term=false)
+    log_sig_basis(dimension, degree; method=LogSigMethod.LyndonWords, scalar_term=false)
 
-Return coordinate labels for ordinary log signatures: tensor words for method 0,
-Lyndon words for method 1, standard bracket expressions for methods 2 and 3.
-The default is method 1, matching `log_sig`. Compressed methods ignore
+Return coordinate labels for ordinary log signatures using [`LogSigMethod`](@ref):
+tensor words for `Expanded`, Lyndon words for `LyndonWords`, standard bracket
+expressions for `LyndonBasis` and `DirectBCH`.
+The default is `LyndonWords`, matching `log_sig`. Compressed methods ignore
 `scalar_term`. Pass the effective (augmented) dimension.
 """
 function log_sig_basis(dimension::Integer, degree::Integer;
-    method::Integer=1, scalar_term::Bool=false)
-    0 <= method <= 3 || throw(ArgumentError("method must be in 0:3"))
-    if method == 0
+    method::LogSigMethod.T=LogSigMethod.LyndonWords, scalar_term::Bool=false)
+    if method == LogSigMethod.Expanded
         basis = words(dimension, degree)
         return scalar_term ? basis : basis[2:end]
     end
-    return method == 1 ? lyndon_words(dimension, degree) : lyndon_brackets(dimension, degree)
+    return method == LogSigMethod.LyndonWords ? lyndon_words(dimension, degree) : lyndon_brackets(dimension, degree)
 end
 
 """
-    branched_log_sig_basis(dimension, degree; planar=false, method=nothing, scalar_term=false)
+    branched_log_sig_basis(dimension, degree; planar=false, method=planar ? BranchedLogSigMethod.MkwWords : BranchedLogSigMethod.Expanded, scalar_term=false)
 
-Return labels in branched-log output order. Method 0 uses BCK trees or MKW ordered
-forests. Planar method 1 uses weighted Lyndon forests (letters are native planar
-tree IDs, weight is node count); methods 2 and 3 use their standard bracketings
+Return labels in branched-log output order using [`BranchedLogSigMethod`](@ref).
+`Expanded` uses BCK trees or MKW ordered forests. `MkwWords` uses weighted
+Lyndon forests (letters are native planar tree IDs, weight is node count);
+`MkwBasis` and `DirectBCH` use their standard bracketings
 `(:bracket, left, right)`, with tree tuples as generators.
 These symbolic expressions use the forest-concatenation commutator of the
 native MKW coordinate projection.
-The default is method 1 for planar logs and 0 otherwise, matching `branched_log_sig`.
+The default is `MkwWords` for planar logs and `Expanded` otherwise, matching `branched_log_sig`.
 Compressed methods ignore `scalar_term` and require planar=true. Enumeration is
 available with either artifact; numerical compressed MKW logs require native 4.x.
 Pass the effective (augmented) dimension.
 """
 function branched_log_sig_basis(dimension::Integer, degree::Integer;
-    planar::Bool=false, method::Union{Nothing,Integer}=nothing, scalar_term::Bool=false)
-    m = method === nothing ? Int(planar) : method
-    0 <= m <= 3 || throw(ArgumentError("method must be in 0:3"))
-    m == 0 || planar || throw(ArgumentError("compressed branched log bases require planar=true"))
+    planar::Bool=false, method::BranchedLogSigMethod.T=planar ? BranchedLogSigMethod.MkwWords : BranchedLogSigMethod.Expanded, scalar_term::Bool=false)
+    method == BranchedLogSigMethod.Expanded || planar || throw(ArgumentError("compressed branched log bases require planar=true"))
     enumeration = _tree_enumeration(dimension, degree, planar)
-    if m == 0
+    if method == BranchedLogSigMethod.Expanded
         basis = copy(enumeration.basis)
         return scalar_term ? basis : basis[2:end]
     end
     selected = findall(_is_lyndon, enumeration.forest_words)
-    m == 1 && return [enumeration.basis[i] for i in selected]
+    method == BranchedLogSigMethod.MkwWords && return [enumeration.basis[i] for i in selected]
     return [_lyndon_bracket(enumeration.forest_words[i], id -> enumeration.rooted[id]) for i in selected]
 end

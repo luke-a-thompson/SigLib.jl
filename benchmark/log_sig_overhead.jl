@@ -23,10 +23,10 @@ for T in (Float32, Float64)
     @eval function native_repeat_julia(direct, signature, convert, packed::Array{$T,3}, out, sig_buffer, batch, len, dim, degree, method, n)
         ccall(REPEAT, Float64,
             (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{$T}, Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, UInt64, Cint, Cint, UInt64),
-            direct, signature, convert, packed, out, sig_buffer, batch, len, dim, degree, method, $T == Float32, n)
+            direct, signature, convert, packed, out, sig_buffer, batch, len, dim, degree, Cint(method), $T == Float32, n)
     end
     @eval function raw_call!(direct, signature, convert, packed::Array{$T,3}, out, sig_buffer, batch, len, dim, degree, method)
-        if method == 3
+        if method == LogSigMethod.DirectBCH
             return ccall(direct, Cint, (Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, UInt64, Cint), packed, out, batch, len, dim, degree, 1)
         end
         rc = ccall(signature, Cint,
@@ -34,11 +34,11 @@ for T in (Float32, Float64)
             packed, sig_buffer, batch, dim, len, degree, false, false, $T(1), true, false, 1, C_NULL, 0, 0, 0)
         rc == 0 || error("signature failed: $rc")
         return ccall(convert, Cint, (Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, Bool, Bool, Cint, Bool, Cint),
-            sig_buffer, out, batch, dim, degree, false, false, method, false, 1)
+            sig_buffer, out, batch, dim, degree, false, false, Cint(method), false, 1)
     end
 end
 
-function compare(::Type{T}, batch, len, dim, degree, method; single=false, samples=15) where T
+function compare(::Type{T}, batch, len, dim, degree, method::LogSigMethod.T; single=false, samples=15) where T
     data = Vector{Float64}(undef, batch * len * dim)
     scale = dim == 2 && len == 129 ? 0.1 : 1.0
     ccall(FILL, Cvoid, (Ptr{Float64}, UInt64, Float64), data, length(data), scale)
@@ -69,7 +69,7 @@ function compare(::Type{T}, batch, len, dim, degree, method; single=false, sampl
     estimate = max(native(100), julia_repeat(public_call, 100))
     iterations = clamp(ceil(Int, 50_000_000 / estimate), 20, 500_000)
     standalone_cache = mktempdir(BUILD)
-    standalone = parse(Float64, read(`$(joinpath(BUILD, "native_bench")) $NATIVE_LIBRARY $standalone_cache $suffix $batch $len $dim $degree $method $iterations`, String))
+    standalone = parse(Float64, read(`$(joinpath(BUILD, "native_bench")) $NATIVE_LIBRARY $standalone_cache $suffix $batch $len $dim $degree $(Int(method)) $iterations`, String))
     native_times, raw_times, public_times = Float64[], Float64[], Float64[]
     for sample in 1:samples
         GC.gc()
@@ -90,7 +90,7 @@ function compare(::Type{T}, batch, len, dim, degree, method; single=false, sampl
     c, raw, j = median(native_times), median(raw_times), median(public_times)
     delta = median(public_times .- native_times)
     @printf("%s,%s,%d,%d,%.6f,%.6f,%.6f,%.6f,%.6f,%.3f,%d,%.6f,%.6f\n",
-        T, shape, degree, method, standalone / 1000, c / 1000, raw / 1000, j / 1000,
+        T, shape, degree, Int(method), standalone / 1000, c / 1000, raw / 1000, j / 1000,
         delta / 1000, 100 * delta / c, bytes, quantile(public_times .- native_times, .25) / 1000,
         quantile(public_times .- native_times, .75) / 1000)
     flush(stdout)
@@ -101,12 +101,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("# Library: ", NATIVE_LIBRARY)
     println("# Native buffers preallocated; Julia public call includes allocations, preparation checks and GC; compilation and initial cache setup excluded.")
     println("dtype,public_shape,degree,method,standalone_c_us,c_us,bare_ccall_us,julia_us,paired_overhead_us,overhead_pct,julia_alloc_bytes,overhead_q25_us,overhead_q75_us")
-    compare(Float64, 1, 3, 2, 2, 3; single=true)
-    compare(Float64, 1, 3, 2, 2, 1; single=true)
-    compare(Float64, 4, 32, 3, 4, 3)
-    compare(Float64, 4, 32, 3, 5, 3)
-    compare(Float64, 4, 32, 3, 4, 1)
-    compare(Float64, 4, 32, 3, 5, 1)
-    compare(Float32, 32, 129, 2, 6, 3)
-    compare(Float64, 1, 129, 2, 8, 3; single=true)
+    compare(Float64, 1, 3, 2, 2, LogSigMethod.DirectBCH; single=true)
+    compare(Float64, 1, 3, 2, 2, LogSigMethod.LyndonWords; single=true)
+    compare(Float64, 4, 32, 3, 4, LogSigMethod.DirectBCH)
+    compare(Float64, 4, 32, 3, 5, LogSigMethod.DirectBCH)
+    compare(Float64, 4, 32, 3, 4, LogSigMethod.LyndonWords)
+    compare(Float64, 4, 32, 3, 5, LogSigMethod.LyndonWords)
+    compare(Float32, 32, 129, 2, 6, LogSigMethod.DirectBCH)
+    compare(Float64, 1, 129, 2, 8, LogSigMethod.DirectBCH; single=true)
 end

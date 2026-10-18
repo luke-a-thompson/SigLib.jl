@@ -53,20 +53,20 @@ end
         @test sig(p, 3; correction=T[0.2], time_aug=true, end_time=2) ≈
             _corrected_signature_reference(augmented_path, 3, reshape(T[0.2, 0, 0, 0], 4, 1))
         @test sig(zeros(T, 1, 2), 4; correction=T[0.2]) ≈ T[0, 0.2, 0, 0.02]
-        @test log_sig(p, 3; correction=T[0.2, 0.1], method=0) ≈ T[1, 0.2, 0.1]
+        @test log_sig(p, 3; correction=T[0.2, 0.1], method=LogSigMethod.Expanded) ≈ T[1, 0.2, 0.1]
         @test branched_sig(zeros(T, 1, 2), 2; correction=T[0.2]) ≈ T[0, 0.2]
     end
 end
 
 @testset "correction layouts and signature families" begin
     families = (
-        (sig, (;)), (log_sig, (; method=0)), (log_sig, (; method=1)), (log_sig, (; method=2)),
+        (sig, (;)), (log_sig, (; method=LogSigMethod.Expanded)), (log_sig, (; method=LogSigMethod.LyndonWords)), (log_sig, (; method=LogSigMethod.LyndonBasis)),
         (branched_sig, (;)), (branched_sig, (; planar=true)),
-        (branched_log_sig, (;)), (branched_log_sig, (; planar=true, method=0)),
+        (branched_log_sig, (;)), (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.Expanded)),
     )
     if SigLib._modern_abi[]
-        families = (families..., (branched_log_sig, (; planar=true, method=1)),
-            (branched_log_sig, (; planar=true, method=2)))
+        families = (families..., (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.MkwWords)),
+            (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.MkwBasis)))
     end
     for T in (Float32, Float64), (f, options) in families, time_aug in (false, true)
         paths = reshape(T.(sin.(1:48) ./ 4), 2, 4, 3, 2)
@@ -88,8 +88,8 @@ end
                 f(paths, 3; kwargs..., correction=specific)
         end
         corrected = sig(paths, 3; correction=shared, time_aug=time_aug)
-        @test log_sig(paths, 3; correction=shared, time_aug=time_aug, method=0) ≈
-            sig_to_log_sig(corrected, 2, 3; time_aug=time_aug, method=0)
+        @test log_sig(paths, 3; correction=shared, time_aug=time_aug, method=LogSigMethod.Expanded) ≈
+            sig_to_log_sig(corrected, 2, 3; time_aug=time_aug, method=LogSigMethod.Expanded)
     end
 
     # Chen composition checks per-segment corrections in the branched algebra.
@@ -100,11 +100,11 @@ end
         right = branched_sig(path[:, 2:3], 3; correction=rows[:, 2], planar=planar)
         @test branched_sig(path, 3; correction=rows, planar=planar) ≈
             branched_sig_combine(left, right, 2, 3; planar=planar)
-        @test branched_log_sig(path, 3; correction=rows, planar=planar, method=0) ≈
-            branched_sig_to_log_sig(branched_sig(path, 3; correction=rows, planar=planar), 2, 3; planar=planar, method=0)
+        @test branched_log_sig(path, 3; correction=rows, planar=planar, method=BranchedLogSigMethod.Expanded) ≈
+            branched_sig_to_log_sig(branched_sig(path, 3; correction=rows, planar=planar), 2, 3; planar=planar, method=BranchedLogSigMethod.Expanded)
     end
     if SigLib._modern_abi[]
-        for method in (1, 2)
+        for method in (BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis)
             @test branched_log_sig(path, 3; correction=rows, planar=true, method=method) ≈
                 branched_sig_to_log_sig(branched_sig(path, 3; correction=rows, planar=true), 2, 3; planar=true, method=method)
         end
@@ -128,12 +128,12 @@ end
         @test_throws ArgumentError f(path, 1; correction=ones(4))
         @test_throws ArgumentError f(path, 0; correction=ones(4))
     end
-    @test_throws ArgumentError log_sig(path, 3; correction=ones(4), method=3)
-    @test log_sig(path, 3; correction=Float64[], method=3) ≈ log_sig(path, 3; method=3)
-    @test_throws ArgumentError rrule(log_sig, path, 3; correction=ones(4), method=3)
+    @test_throws ArgumentError log_sig(path, 3; correction=ones(4), method=LogSigMethod.DirectBCH)
+    @test log_sig(path, 3; correction=Float64[], method=LogSigMethod.DirectBCH) ≈ log_sig(path, 3; method=LogSigMethod.DirectBCH)
+    @test_throws ArgumentError rrule(log_sig, path, 3; correction=ones(4), method=LogSigMethod.DirectBCH)
     if SigLib._modern_abi[]
-        @test_throws ArgumentError branched_log_sig(path, 3; correction=ones(4), planar=true, method=3)
-        @test_throws ArgumentError rrule(branched_log_sig, path, 3; correction=ones(4), planar=true, method=3)
+        @test_throws ArgumentError branched_log_sig(path, 3; correction=ones(4), planar=true, method=BranchedLogSigMethod.DirectBCH)
+        @test_throws ArgumentError rrule(branched_log_sig, path, 3; correction=ones(4), planar=true, method=BranchedLogSigMethod.DirectBCH)
     end
 end
 
@@ -151,12 +151,12 @@ end
     rows = [0.01 -0.02; -0.02 0.01; 0.03 -0.01; -0.04 0.03]
     specific = repeat(reshape(rows, 4, 2, 1), 1, 1, 2)
     specific[:, :, 2] .*= -2
-    families = ((sig, (;)), (log_sig, (; method=0)), (log_sig, (; method=1)), (log_sig, (; method=2)),
+    families = ((sig, (;)), (log_sig, (; method=LogSigMethod.Expanded)), (log_sig, (; method=LogSigMethod.LyndonWords)), (log_sig, (; method=LogSigMethod.LyndonBasis)),
         (branched_sig, (;)), (branched_sig, (; planar=true)),
-        (branched_log_sig, (;)), (branched_log_sig, (; planar=true, method=0)))
+        (branched_log_sig, (;)), (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.Expanded)))
     if SigLib._modern_abi[]
-        families = (families..., (branched_log_sig, (; planar=true, method=1)),
-            (branched_log_sig, (; planar=true, method=2)))
+        families = (families..., (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.MkwWords)),
+            (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.MkwBasis)))
     end
     for (f, options) in families, (p, correction) in ((path, rows[:, 1]), (path, rows), (paths, specific)), time_aug in (false, true)
         kwargs = (; options..., correction, time_aug, scalar_term=true, end_time=0.7)
