@@ -1,11 +1,11 @@
-# Bootstrap binary: replace with the upstream release manifest using scripts/update_artifacts.jl.
+# pySigLib main at e075fffd77c3605a032052dd59edec0c0497c339; Highway runtime SIMD.
 [[pysiglib_cpu]]
 arch = "x86_64"
-git-tree-sha1 = "15636ce5b563db1fe73ed5c96d4092e6d4585e2f"
+git-tree-sha1 = "df7f91f5011aace5c1dc7d48f20d22c450ce4845"
 lazy = true
 libc = "glibc"
 os = "linux"
 
     [[pysiglib_cpu.download]]
-    sha256 = "d007b49262daaa4d90016897ff86bd43366bece77fe5d87d8954a1e7e3ac4457"
-    url = "https://raw.githubusercontent.com/luke-a-thompson/SigLib.jl/main/products/cpsig.v3.1.0.x86_64-linux-gnu.tar.gz"
+    sha256 = "e2a543505ce407a28be5277d2d8e82dcf1b55b8850d13f919bd34cdfe139cf34"
+    url = "https://raw.githubusercontent.com/luke-a-thompson/SigLib.jl/main/products/cpsig.e075fff.x86_64-linux-gnu.tar.gz"

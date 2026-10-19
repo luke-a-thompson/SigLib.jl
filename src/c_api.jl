@@ -461,35 +461,19 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         n_jobs::Integer,
         method::BranchedLogSigMethod.T,
     )
-        status = if _modern_abi[]
-            ccall(
-                _cpsig_symbol($symbol),
-                Cint,
-                (
-                    Ptr{$T}, Ptr{$T},
-                    UInt64, UInt64, UInt64, Cint, Cint, Bool, Bool,
-                ),
-                bsig, out,
-                _as_uint64(batch_size, "batch_size"),
-                _as_uint64(dimension, "dimension"),
-                _as_uint64(max_nodes, "max_nodes"),
-                Cint(method), _as_cint_n_jobs(n_jobs), planar, scalar_term,
-            )
-        else
-            ccall(
-                _cpsig_symbol($symbol),
-                Cint,
-                (
-                    Ptr{$T}, Ptr{$T},
-                    UInt64, UInt64, UInt64, Cint, Bool, Bool,
-                ),
-                bsig, out,
-                _as_uint64(batch_size, "batch_size"),
-                _as_uint64(dimension, "dimension"),
-                _as_uint64(max_nodes, "max_nodes"),
-                _as_cint_n_jobs(n_jobs), planar, scalar_term,
-            )
-        end
+        status = ccall(
+            _cpsig_symbol($symbol),
+            Cint,
+            (
+                Ptr{$T}, Ptr{$T},
+                UInt64, UInt64, UInt64, Cint, Cint, Bool, Bool,
+            ),
+            bsig, out,
+            _as_uint64(batch_size, "batch_size"),
+            _as_uint64(dimension, "dimension"),
+            _as_uint64(max_nodes, "max_nodes"),
+            Cint(method), _as_cint_n_jobs(n_jobs), planar, scalar_term,
+        )
         check_status(status, $symbol)
         return out
     end
@@ -592,35 +576,19 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         n_jobs::Integer,
         method::BranchedLogSigMethod.T,
     )
-        status = if _modern_abi[]
-            ccall(
-                _cpsig_symbol($symbol),
-                Cint,
-                (
-                    Ptr{$T}, Ptr{$T}, Ptr{$T},
-                    UInt64, UInt64, UInt64, Cint, Cint, Bool, Bool,
-                ),
-                bsig, derivs, out,
-                _as_uint64(batch_size, "batch_size"),
-                _as_uint64(dimension, "dimension"),
-                _as_uint64(max_nodes, "max_nodes"),
-                Cint(method), _as_cint_n_jobs(n_jobs), planar, scalar_term,
-            )
-        else
-            ccall(
-                _cpsig_symbol($symbol),
-                Cint,
-                (
-                    Ptr{$T}, Ptr{$T}, Ptr{$T},
-                    UInt64, UInt64, UInt64, Cint, Bool, Bool,
-                ),
-                bsig, derivs, out,
-                _as_uint64(batch_size, "batch_size"),
-                _as_uint64(dimension, "dimension"),
-                _as_uint64(max_nodes, "max_nodes"),
-                _as_cint_n_jobs(n_jobs), planar, scalar_term,
-            )
-        end
+        status = ccall(
+            _cpsig_symbol($symbol),
+            Cint,
+            (
+                Ptr{$T}, Ptr{$T}, Ptr{$T},
+                UInt64, UInt64, UInt64, Cint, Cint, Bool, Bool,
+            ),
+            bsig, derivs, out,
+            _as_uint64(batch_size, "batch_size"),
+            _as_uint64(dimension, "dimension"),
+            _as_uint64(max_nodes, "max_nodes"),
+            Cint(method), _as_cint_n_jobs(n_jobs), planar, scalar_term,
+        )
         check_status(status, $symbol)
         return out
     end

@@ -20,7 +20,7 @@ Methods use scoped enum values: `LogSigMethod.Expanded`, `.LyndonWords` (default
 
 ## Documentation
 
-See [`docs/src/index.md`](docs/src/index.md) for supported operations, installation, native artifact updates, and extension conventions. The bootstrap artifact currently supports Linux x86-64 with glibc; upstream release manifests also provide Windows x86-64 and Apple Silicon macOS binaries.
+See [`docs/src/index.md`](docs/src/index.md) for supported operations, installation, native artifact updates, and extension conventions. The bundled artifact uses a pinned GitHub checkout with runtime SIMD dispatch and requires Linux x86-64 with glibc 2.38 or newer. SigLib requires the 4.x native ABI.
 
 ## License
 

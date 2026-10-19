@@ -14,4 +14,12 @@ jobs:
         with:
           version: ${{ matrix.julia }}
       - uses: julia-actions/cache@v2
+      - name: Install bundled native artifact
+        shell: julia --color=yes {0}
+        run: |
+          using Pkg.Artifacts
+          meta = artifact_meta("pysiglib_cpu", "Artifacts.toml")
+          download = only(meta["download"])
+          url = "file://" * abspath("products", basename(download["url"]))
+          @assert download_artifact(Base.SHA1(meta["git-tree-sha1"]), url, download["sha256"]) === true
       - uses: julia-actions/julia-runtest@v1

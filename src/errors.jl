@@ -24,7 +24,7 @@ end
 
 function check_status(status::Cint, function_name::Symbol)
     if status != 0
-        message = _last_error[] == C_NULL ? C_NULL : ccall(_last_error[], Cstring, ())
+        message = ccall(_last_error[], Cstring, ())
         detail = message == C_NULL ? "" : unsafe_string(message)
         throw(SigLibError(function_name, status, detail))
     end

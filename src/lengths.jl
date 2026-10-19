@@ -40,10 +40,6 @@ function branched_log_sig_length(dimension::Integer, degree::Integer; planar::Bo
     n = _as_uint64(degree, "degree")
     d <= 255 || throw(ArgumentError("branched log signature dimension must be <= 255"))
     (d == 0 || n == 0) && return 0
-    if !_modern_abi[]
-        planar && throw(ArgumentError("compressed branched log signatures require a pySigLib 4.x native artifact"))
-        return branched_sig_length(d, n)
-    end
     len = ccall(_cpsig_symbol(:branched_log_sig_length), UInt64, (UInt64, UInt64, Bool), d, n, planar)
     0 < len <= typemax(Int) || throw(OverflowError("branched log signature length overflowed"))
     return Int(len)

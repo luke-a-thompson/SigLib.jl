@@ -138,24 +138,22 @@ end
         selected = [word_to_idx(w, 2) for w in log_sig_basis(2, degree; method=LogSigMethod.LyndonWords)]
         @test tensorlog[selected] ≈ log_sig(path, degree; method=LogSigMethod.LyndonWords)
     end
-    if SigLib._modern_abi[]
-        for degree in 2:4
-            extracted = branched_log_sig_basis(2, degree; planar=true, method=BranchedLogSigMethod.MkwWords)
-            bracketed = branched_log_sig_basis(2, degree; planar=true, method=BranchedLogSigMethod.MkwBasis)
-            @test length(bracketed) == branched_log_sig_length(2, degree; planar=true)
-            @test bracketed == branched_log_sig_basis(2, degree; planar=true, method=BranchedLogSigMethod.DirectBCH)
-            coefficients = branched_log_sig(path, degree; planar=true, method=BranchedLogSigMethod.MkwBasis)
-            expanded = zeros(branched_sig_length(2, degree; planar=true))
-            for (coefficient, expr) in zip(coefficients, bracketed)
-                for (forest, multiplicity) in expand_basis_bracket(expr)
-                    expanded[tree_to_idx(forest, 2, degree; planar=true)] += coefficient * multiplicity
-                end
+    for degree in 2:4
+        extracted = branched_log_sig_basis(2, degree; planar=true, method=BranchedLogSigMethod.MkwWords)
+        bracketed = branched_log_sig_basis(2, degree; planar=true, method=BranchedLogSigMethod.MkwBasis)
+        @test length(bracketed) == branched_log_sig_length(2, degree; planar=true)
+        @test bracketed == branched_log_sig_basis(2, degree; planar=true, method=BranchedLogSigMethod.DirectBCH)
+        coefficients = branched_log_sig(path, degree; planar=true, method=BranchedLogSigMethod.MkwBasis)
+        expanded = zeros(branched_sig_length(2, degree; planar=true))
+        for (coefficient, expr) in zip(coefficients, bracketed)
+            for (forest, multiplicity) in expand_basis_bracket(expr)
+                expanded[tree_to_idx(forest, 2, degree; planar=true)] += coefficient * multiplicity
             end
-            selected = [tree_to_idx(f, 2, degree; planar=true) for f in extracted]
-            method1 = branched_log_sig(path, degree; planar=true, method=BranchedLogSigMethod.MkwWords)
-            @test expanded[selected] ≈ method1 atol=1e-12
-            hopflog = branched_log_sig(path, degree; planar=true, method=BranchedLogSigMethod.Expanded)
-            @test hopflog[selected] ≈ method1 atol=1e-12
         end
+        selected = [tree_to_idx(f, 2, degree; planar=true) for f in extracted]
+        method1 = branched_log_sig(path, degree; planar=true, method=BranchedLogSigMethod.MkwWords)
+        @test expanded[selected] ≈ method1 atol=1e-12
+        hopflog = branched_log_sig(path, degree; planar=true, method=BranchedLogSigMethod.Expanded)
+        @test hopflog[selected] ≈ method1 atol=1e-12
     end
 end

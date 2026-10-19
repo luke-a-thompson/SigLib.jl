@@ -195,38 +195,36 @@ end
 end
 
 @testset "branched log method pullbacks" begin
-    if SigLib._modern_abi[]
-        path = [0.0 0.2 0.7 0.5; 0.0 -0.3 0.4 0.8]
-        for method in instances(BranchedLogSigMethod.T), scalar_term in (false, true)
-            options = (; planar=true, method=method, scalar_term=scalar_term)
-            y, back = rrule(branched_log_sig, path, 3; options...)
-            ybar = collect(range(0.1, 0.3; length=length(y)))
-            _test_pullback_input(x -> branched_log_sig(x, 3; options...), path, ybar, back(ybar)[2])
-            @test back(ZeroTangent())[2] isa ZeroTangent
-        end
-        for method in (BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis, BranchedLogSigMethod.DirectBCH), lead_lag in (false, true)
-            options = (; planar=true, method=method, time_aug=true, lead_lag=lead_lag, end_time=2.0)
-            y, back = rrule(branched_log_sig, path, 2; options...)
-            ybar = collect(range(0.05, 0.2; length=length(y)))
-            _test_pullback_input(x -> branched_log_sig(x, 2; options...), path, ybar, back(ybar)[2])
-        end
-        for method in (BranchedLogSigMethod.Expanded, BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis), scalar_term in (false, true)
-            bsig = branched_sig(path, 3; planar=true, scalar_term=scalar_term)
-            y, back = rrule(branched_sig_to_log_sig, bsig, 2, 3; planar=true, method=method)
-            ybar = collect(range(0.1, 0.3; length=length(y)))
-            _test_pullback_input(x -> branched_sig_to_log_sig(x, 2, 3; planar=true, method=method),
-                bsig, ybar, back(ybar)[2])
-        end
-        for method in (BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis, BranchedLogSigMethod.DirectBCH)
-            y, back = rrule(branched_log_sig, path, 0; planar=true, method=method, scalar_term=true)
-            @test isempty(y)
-            @test back(Float64[])[2] == zeros(size(path))
-            y32, back32 = rrule(branched_log_sig, Float32.(path), 3; planar=true, method=method)
-            @test eltype(back32(ones(Float32, size(y32)))[2]) === Float32
-            batch = repeat(reshape(path, 2, 4, 1), 1, 1, 2)
-            yb, backb = rrule(branched_log_sig, batch, 3; planar=true, method=method)
-            bar = fill(0.1, size(yb))
-            _test_pullback_input(x -> branched_log_sig(x, 3; planar=true, method=method), batch, bar, backb(bar)[2])
-        end
+    path = [0.0 0.2 0.7 0.5; 0.0 -0.3 0.4 0.8]
+    for method in instances(BranchedLogSigMethod.T), scalar_term in (false, true)
+        options = (; planar=true, method=method, scalar_term=scalar_term)
+        y, back = rrule(branched_log_sig, path, 3; options...)
+        ybar = collect(range(0.1, 0.3; length=length(y)))
+        _test_pullback_input(x -> branched_log_sig(x, 3; options...), path, ybar, back(ybar)[2])
+        @test back(ZeroTangent())[2] isa ZeroTangent
+    end
+    for method in (BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis, BranchedLogSigMethod.DirectBCH), lead_lag in (false, true)
+        options = (; planar=true, method=method, time_aug=true, lead_lag=lead_lag, end_time=2.0)
+        y, back = rrule(branched_log_sig, path, 2; options...)
+        ybar = collect(range(0.05, 0.2; length=length(y)))
+        _test_pullback_input(x -> branched_log_sig(x, 2; options...), path, ybar, back(ybar)[2])
+    end
+    for method in (BranchedLogSigMethod.Expanded, BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis), scalar_term in (false, true)
+        bsig = branched_sig(path, 3; planar=true, scalar_term=scalar_term)
+        y, back = rrule(branched_sig_to_log_sig, bsig, 2, 3; planar=true, method=method)
+        ybar = collect(range(0.1, 0.3; length=length(y)))
+        _test_pullback_input(x -> branched_sig_to_log_sig(x, 2, 3; planar=true, method=method),
+            bsig, ybar, back(ybar)[2])
+    end
+    for method in (BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis, BranchedLogSigMethod.DirectBCH)
+        y, back = rrule(branched_log_sig, path, 0; planar=true, method=method, scalar_term=true)
+        @test isempty(y)
+        @test back(Float64[])[2] == zeros(size(path))
+        y32, back32 = rrule(branched_log_sig, Float32.(path), 3; planar=true, method=method)
+        @test eltype(back32(ones(Float32, size(y32)))[2]) === Float32
+        batch = repeat(reshape(path, 2, 4, 1), 1, 1, 2)
+        yb, backb = rrule(branched_log_sig, batch, 3; planar=true, method=method)
+        bar = fill(0.1, size(yb))
+        _test_pullback_input(x -> branched_log_sig(x, 3; planar=true, method=method), batch, bar, backb(bar)[2])
     end
 end

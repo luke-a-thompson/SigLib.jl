@@ -15,10 +15,7 @@
     @test branched_sig(path64, 3) ≈ Float64[1, 1 / 2, 1 / 3, 1 / 6]
     @test branched_sig(path64, 3; scalar_term=true) ≈ Float64[1, 1, 1 / 2, 1 / 3, 1 / 6]
     @test branched_signature(path64, 3) ≈ branched_sig(path64, 3)
-    # cpSIG 4 changed the planar basis; fixtures follow the pinned native version.
-    planar_expected = SigLib._modern_abi[] ?
-        Float64[1, 1 / 2, 1 / 2, 1 / 6, 1 / 3, 1 / 6, 1 / 6, 1 / 6] :
-        Float64[1, 1 / 2, 1 / 2, 1 / 6, 1 / 4, 1 / 4, 1 / 3, 1 / 6]
+    planar_expected = Float64[1, 1 / 2, 1 / 2, 1 / 6, 1 / 3, 1 / 6, 1 / 6, 1 / 6]
     @test branched_sig(path64, 3; planar=true) ≈ planar_expected
 
     path32 = reshape(Float32[0, 1], 1, 2)

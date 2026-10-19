@@ -1,5 +1,3 @@
-const _cache_dir_configured = Ref(false)
-
 # CUDA supplies the same cache operations through its optional extension.
 _cache_call(::Val{:cuda}, args...) = throw(ArgumentError("load CUDA.jl to use device=:cuda"))
 _cache_call(::Val, args...) = throw(ArgumentError("device must be :cpu, :cuda, or :both"))
@@ -11,28 +9,18 @@ end
 
 function _cache_call(::Val{:cpu}, ::Val{:set_cache_dir}, path)
     check_status(ccall(_cpsig_symbol(:set_cache_dir), Cint, (Cstring,), path), :set_cache_dir)
-    _cache_dir_configured[] = true
 end
 function _cache_call(::Val{:cpu}, ::Val{:clear_cache}, use_disk)
-    _prepare_cache_directory(use_disk)
     check_status(ccall(_cpsig_symbol(:clear_cache), Cint, (Bool,), use_disk), :clear_cache)
 end
 function _cache_call(::Val{:cpu}, ::Val{:prepare_log_sig}, d, n, m, use_disk)
-    # 3.1's direct method uses implicit BCH preparation; method 3 corrupts its basis cache.
-    !_modern_abi[] && m == LogSigMethod.DirectBCH && (m = LogSigMethod.LyndonBasis)
-    _prepare_cache_directory(use_disk)
     check_status(ccall(_cpsig_symbol(:prepare_log_sig), Cint, (UInt64, UInt64, Cint, Bool), d, n, Cint(m), use_disk), :prepare_log_sig)
 end
 function _cache_call(::Val{:cpu}, ::Val{:prepare_branched_sig}, d, n, planar, use_disk)
-    _prepare_cache_directory(use_disk)
     check_status(ccall(_cpsig_symbol(:prepare_branched_sig), Cint, (UInt64, UInt64, Bool, Bool), d, n, use_disk, planar), :prepare_branched_sig)
 end
 function _cache_call(::Val{:cpu}, ::Val{:prepare_branched_log_sig}, d, n, m, planar, use_disk)
-    if _modern_abi[]
-        check_status(ccall(_cpsig_symbol(:prepare_branched_log_sig), Cint, (UInt64, UInt64, Cint, Bool, Bool), d, n, Cint(m), use_disk, planar), :prepare_branched_log_sig)
-    else
-        d != 0 && _cache_call(Val(:cpu), Val(:prepare_branched_sig), d, n, planar, use_disk)
-    end
+    check_status(ccall(_cpsig_symbol(:prepare_branched_log_sig), Cint, (UInt64, UInt64, Cint, Bool, Bool), d, n, Cint(m), use_disk, planar), :prepare_branched_log_sig)
 end
 
 for name in (:prepare_log_sig, :prepare_branched_sig, :prepare_branched_log_sig)
@@ -54,14 +42,6 @@ function set_cache_dir(directory::AbstractString; device::Symbol=:cpu)
         path = abspath(directory)
         mkpath(path)
         _cache_call(Val(device), Val(:set_cache_dir), path)
-    end
-    return nothing
-end
-
-function _prepare_cache_directory(use_disk::Bool)
-    # Older cpSIG creates a directory even for in-memory caches. Keep it temporary.
-    if !_modern_abi[] && !_cache_dir_configured[] && !use_disk
-        set_cache_dir(mktempdir())
     end
     return nothing
 end
@@ -88,7 +68,7 @@ end
 """
     prepare_branched_log_sig(dimension, degree, method; time_aug=false, lead_lag=false, planar=false, use_disk=false, device=:cpu)
 
-Prepare branched-log-signature caches. Choose a [`BranchedLogSigMethod`](@ref) value; all except `Expanded` require `planar=true` and a 4.x native artifact. High-level functions prepare automatically on the input device.
+Prepare branched-log-signature caches. Choose a [`BranchedLogSigMethod`](@ref) value; all except `Expanded` require `planar=true`. High-level functions prepare automatically on the input device.
 """
 function prepare_branched_log_sig(
     dimension::Integer, degree::Integer, method::BranchedLogSigMethod.T;

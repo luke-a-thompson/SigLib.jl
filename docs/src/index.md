@@ -34,7 +34,7 @@ This changes the earlier Python-style axis order. To migrate existing paths or c
 
 Corrections must have the same eltype, backend, and CUDA context as the path; views are accepted. `nothing` and empty arrays mean no correction. A time channel added by `time_aug=true` receives no correction entries. Non-empty corrections cannot be combined with `lead_lag=true` or direct BCH (`LogSigMethod.DirectBCH` or `BranchedLogSigMethod.DirectBCH`). For non-Lie corrections, use `LogSigMethod.Expanded` or `BranchedLogSigMethod.Expanded` to retain the full tensor or Hopf logarithm. ChainRules returns path gradients with corrections held constant.
 
-Native cpSIG 3.1 and 4.0 have a nonplanar branched-signature discrepancy at degree 3: supplying a non-empty all-zero correction changes some branching-tree coefficients compared with omitting the correction. SigLib forwards the native results, matching pySigLib; regression tests record this discrepancy. Ordinary tensor signatures pass the zero-correction identity and an independent tensor-series reference.
+The pinned native checkout passes the nonplanar zero-correction identity, which was broken in the 4.0.0 release wheel. Ordinary tensor signatures also pass an independent tensor-series reference.
 
 For example, the Ito lift for a 2D Brownian path with identity covariance uses the local level-2 correction `-0.5 * dt * I`, flattened in lexicographic order:
 
@@ -72,7 +72,7 @@ log_sig!(workspace, path)         # overwrites result; saved keeps the previous 
 
 The returned array belongs to the workspace and is overwritten on each call. Use a separate workspace for each concurrent computation. Native cache preparation and clearing remain synchronized; a workspace remains usable after `clear_log_sig_cache()`. The warmed call allocates no Julia memory for dense rank-3 CPU paths; CUDA calls reuse device storage.
 
-Branched log signatures default to `BranchedLogSigMethod.Expanded` for nonplanar paths and `BranchedLogSigMethod.MkwWords` for planar paths. `Expanded` returns the full Hopf logarithm; `MkwWords` returns extracted weighted Lyndon coordinates and `MkwBasis` returns MKW basis coordinates. `DirectBCH` computes the same coordinates as `MkwBasis` directly through BCH. Conversion from a branched signature accepts every branched method except `DirectBCH` and infers the scalar term from the input length; `Expanded` preserves that format, while compressed outputs are scalar-free. `branched_log_sig_length` returns the nonplanar tree count or the compressed planar length. All except `Expanded` require `planar=true` and a 4.x native artifact; with the 3.1 bootstrap, use `planar=true, method=BranchedLogSigMethod.Expanded` for expanded planar logs.
+Branched log signatures default to `BranchedLogSigMethod.Expanded` for nonplanar paths and `BranchedLogSigMethod.MkwWords` for planar paths. `Expanded` returns the full Hopf logarithm; `MkwWords` returns extracted weighted Lyndon coordinates and `MkwBasis` returns MKW basis coordinates. `DirectBCH` computes the same coordinates as `MkwBasis` directly through BCH. Conversion from a branched signature accepts every branched method except `DirectBCH` and infers the scalar term from the input length; `Expanded` preserves that format, while compressed outputs are scalar-free. `branched_log_sig_length` returns the nonplanar tree count or the compressed planar length. All except `Expanded` require `planar=true`.
 
 ```julia
 branched_log_sig(path, 3; planar=true, method=BranchedLogSigMethod.MkwBasis)
@@ -82,7 +82,7 @@ prepare_branched_log_sig(2, 3, BranchedLogSigMethod.MkwBasis; planar=true)
 
 Load `ChainRulesCore` to enable reverse-mode rules for the allocating numerical operations. Composed log-signature rules reuse the forward signature. `n_jobs=1` runs native computations serially; `-1` requests all available native threads. Cache-dependent operations are synchronized across Julia tasks, including preparation, clearing, and pullbacks. The native operation can still use multiple threads internally. Cache lifetime is shared within the process; external calls into the same library must obey the same synchronization rules.
 
-In-memory caches prepare automatically. Use `set_cache_dir(directory)` before requesting persistent disk caches with `use_disk=true`; SigLib creates the parent directory. The legacy 3.1 binary uses a temporary directory for its in-memory cache bookkeeping. Upstream 4.x does not need that directory.
+In-memory caches prepare automatically. Use `set_cache_dir(directory)` before requesting persistent disk caches with `use_disk=true`; SigLib creates the parent directory.
 
 ## Words, trees, and log bases
 
@@ -130,7 +130,7 @@ mkw_labels = branched_log_sig_basis(2, 3; planar=true, method=BranchedLogSigMeth
 
 A bracket expression `(:bracket, left, right)` means the standard commutator `left * right - right * left`; integers are ordinary letter generators, and tree tuples are MKW generators. Products in these symbolic coordinate labels use word concatenation for ordinary logs and forest concatenation for MKW, matching the native coordinate projection. Ordinary `log_sig_basis` returns tensor words for `LogSigMethod.Expanded`, Lyndon words for `LyndonWords`, and bracket expressions for `LyndonBasis`/`DirectBCH`. Its default is `LyndonWords`, matching `log_sig`; choose the same method for your labels and coefficients.
 
-`branched_log_sig_basis` follows the numerical branched-log defaults: `BranchedLogSigMethod.Expanded` for BCK and `MkwWords` for MKW. `Expanded` labels the full Hopf log with trees/forests; `MkwWords` labels extracted coordinates with weighted Lyndon forests; `MkwBasis` and `DirectBCH` label the corresponding standard bracketings. Each planar rooted tree is a letter ordered by its native tree ID, with weight equal to its node count. The truncation bounds total node count. BCK logs retain one coordinate per nonplanar tree. Compressed basis enumeration works with either native version; computing compressed MKW coefficients requires 4.x.
+`branched_log_sig_basis` follows the numerical branched-log defaults: `BranchedLogSigMethod.Expanded` for BCK and `MkwWords` for MKW. `Expanded` labels the full Hopf log with trees/forests; `MkwWords` labels extracted coordinates with weighted Lyndon forests; `MkwBasis` and `DirectBCH` label the corresponding standard bracketings. Each planar rooted tree is a letter ordered by its native tree ID, with weight equal to its node count. The truncation bounds total node count. BCK logs retain one coordinate per nonplanar tree.
 
 Enumeration materializes the requested basis, so memory grows with the number of words, trees, or forests. Tree enumerations and index maps are cached in Julia for reuse.
 
@@ -152,7 +152,7 @@ clear_log_sig_cache(; device=:cuda)
 
 Multiple inputs must use the same backend and CUDA context; noncontiguous views are materialized on the GPU; dense inputs and outputs need no layout copies. Calls activate the input's context and synchronize the device before and after native work because cuSIG manages its own streams and accepts no caller stream. Native calls are synchronous. `n_jobs` controls CPU calls and has no effect on CUDA calls. Upstream limits `BranchedLogSigMethod.DirectBCH` to degree 20 on CUDA.
 
-Cache preparation is automatic on the input device. Explicit cache controls accept `device=:cpu` (default), `:cuda`, or `:both`; CUDA preparation uses the active device; clearing affects native caches across devices. CUDA is optional for CPU users, and loading CUDA.jl alone does not load the cuSIG artifact. GPU support requires the upstream 4.x release manifest described below; the legacy bootstrap supports CPU calls.
+Cache preparation is automatic on the input device. Explicit cache controls accept `device=:cpu` (default), `:cuda`, or `:both`; CUDA preparation uses the active device; clearing affects native caches across devices. CUDA is optional for CPU users, and loading CUDA.jl alone does not load the cuSIG artifact. GPU support requires the upstream 4.x release manifest described below; the bundled artifact supports CPU calls.
 
 Run the separate hardware suite on a machine with a working NVIDIA GPU and the matching artifacts:
 
@@ -177,11 +177,15 @@ Files ending in `_batch_last_results.csv` record the current layout. Other CSV f
 
 ## Native artifacts
 
-The root `Artifacts.toml` currently pins the existing, verified 3.1 bootstrap binary. Import the published upstream manifest with `julia scripts/update_artifacts.jl vVERSION`, then run `julia --project -e 'using Pkg; Pkg.test()'` before committing it. The updater checks artifact hashes, download checksums, and release URLs before replacing the file. CUDA calls load the lazy `pysiglib_cuda12` artifact on first use. CPU and CUDA artifacts must come from the same 4.x release.
+SigLib requires the pySigLib 4.x ABI. The root `Artifacts.toml` pins [GitHub commit `e075fff`](https://github.com/daniil-shmelev/pySigLib/tree/e075fffd77c3605a032052dd59edec0c0497c339), which includes Highway runtime SIMD dispatch. The 4.0.0 release wheel predates that implementation. The native archive is bundled under `products/`, includes dependency licenses and `pysiglib/BUILD_INFO.toml`, and needs no Python or compiler at runtime.
 
-The loader accepts the upstream `pysiglib/` layout and the bootstrap `lib/` layout, loads Windows TBB dependencies, and selects the 3.1 or 4.x branched-conversion ABI by native capability. cpSIG 4 changes planar branched-signature coordinates, so stored planar coefficients must stay associated with their native version. Julia artifact overrides can select a local build for development without changing package code.
+The bundled build targets Linux x86-64, includes SSE2 and AVX2 kernels selected at runtime, and requires glibc 2.38+ and a C++ runtime providing `GLIBCXX_3.4.32`. It was built with GCC 13.3, `-DCMAKE_BUILD_TYPE=Release -DPYSIGLIB_AVX=ON -DPYSIGLIB_JAX_FFI=OFF`, and no `-march=native`. Upstream pins Highway and oneTBB; their commits are recorded in the archive. To rebuild, configure that checkout with those options, build target `cpsig`, and install to a staging directory before packaging its native libraries and licenses as a Julia artifact.
 
-Upstream CPU artifacts cover Linux/Windows x86-64 and macOS arm64. Their minimum requirements are glibc 2.28 and x86-64-v3 on Linux, AVX2 on Windows, and macOS 11 on Apple Silicon. Julia's platform selector does not enforce the CPU/glibc requirements. See the [upstream artifact documentation](https://github.com/daniil-shmelev/pySigLib/blob/main/docs/julia-artifacts.md) for current release details.
+When upstream publishes Julia release assets, import their manifest with `julia scripts/update_artifacts.jl v4.VERSION.PATCH`, then run `julia --project -e 'using Pkg; Pkg.test()'`. The updater checks artifact hashes, download checksums, and release URLs before replacing the file. CUDA calls load the lazy `pysiglib_cuda12` artifact on first use; its manifest entry must be supplied by an upstream release manifest or a local development manifest. CPU and CUDA artifacts must use matching upstream revisions.
+
+The loader uses the upstream `pysiglib/` layout and loads Windows TBB dependencies. Julia artifact overrides can select a local 4.x build for development without changing package code.
+
+Julia's platform selector does not enforce glibc or C++ runtime requirements. Other platforms need matching native builds or an upstream artifact manifest; see the [upstream artifact documentation](https://github.com/daniil-shmelev/pySigLib/blob/main/docs/julia-artifacts.md).
 
 ## Extending the wrapper
 

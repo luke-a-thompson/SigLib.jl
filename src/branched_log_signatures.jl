@@ -3,7 +3,6 @@ _validate_branched_log_sig_degree(::AbstractArray, degree, method) = nothing
 function _validate_branched_log_sig_method(method::BranchedLogSigMethod.T, planar::Bool; conversion::Bool=false)
     method != BranchedLogSigMethod.Expanded && !planar && throw(ArgumentError("branched log signature methods other than BranchedLogSigMethod.Expanded require planar=true"))
     conversion && method == BranchedLogSigMethod.DirectBCH && throw(ArgumentError("BranchedLogSigMethod.DirectBCH requires branched_log_sig(path, degree)"))
-    method != BranchedLogSigMethod.Expanded && !_modern_abi[] && throw(ArgumentError("compressed branched log signatures require a pySigLib 4.x native artifact"))
     return nothing
 end
 

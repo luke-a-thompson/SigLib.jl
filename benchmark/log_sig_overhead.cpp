@@ -69,9 +69,7 @@ int main(int argc, char** argv) {
     uint64_t dim = std::strtoull(argv[6], nullptr, 10), degree = std::strtoull(argv[7], nullptr, 10);
     int method = std::atoi(argv[8]);
     uint64_t iterations = std::strtoull(argv[9], nullptr, 10);
-    // cpSIG 3.1 needs method 2 preparation for direct BCH; 4.x uses method 3.
-    bool modern = dlsym(lib, "branched_log_sig_length") != nullptr;
-    if (set_cache(argv[2]) || prepare(dim, degree, !modern && method == 3 ? 2 : method, false)) return 2;
+    if (set_cache(argv[2]) || prepare(dim, degree, method, false)) return 2;
     std::vector<double> data(batch * length * dim), out(batch * log_length(dim, degree)), sig(batch * (sig_length(dim, degree) - 1));
     fill_path(data.data(), data.size(), dim == 2 && length == 129 ? 0.1 : 1.0);
     std::vector<float> data_f(data.begin(), data.end()), out_f(out.size()), sig_f(sig.size());

@@ -23,7 +23,6 @@ end
 
 function _library()
     if _libcusig[] == C_NULL
-        SigLib._modern_abi[] || throw(ArgumentError("CUDA requires matching pySigLib 4.x CPU and CUDA artifacts"))
         manifest = joinpath(pkgdir(SigLib), "Artifacts.toml")
         hash = artifact_hash("pysiglib_cuda12", manifest)
         hash === nothing && throw(ArgumentError("no CUDA artifact for this platform; import the upstream release manifest with scripts/update_artifacts.jl"))

@@ -24,15 +24,13 @@
         @test prepare_log_sig(2, 3, method) === nothing
         @test LogSigWorkspace(path, 3; method).method === method
     end
-    if SigLib._modern_abi[]
-        for method in instances(BranchedLogSigMethod.T)
-            @test prepare_branched_log_sig(2, 3, method; planar=true) === nothing
-        end
-        planar_sig = branched_sig(path, 3; planar=true)
-        @test branched_sig_to_log_sig(planar_sig, 2, 3; planar=true) ≈ branched_log_sig(path, 3; planar=true)
-        @test branched_log_sig(path, 3; planar=true) ==
-            branched_log_sig(path, 3; planar=true, method=BranchedLogSigMethod.MkwWords)
+    for method in instances(BranchedLogSigMethod.T)
+        @test prepare_branched_log_sig(2, 3, method; planar=true) === nothing
     end
+    planar_sig = branched_sig(path, 3; planar=true)
+    @test branched_sig_to_log_sig(planar_sig, 2, 3; planar=true) ≈ branched_log_sig(path, 3; planar=true)
+    @test branched_log_sig(path, 3; planar=true) ==
+        branched_log_sig(path, 3; planar=true, method=BranchedLogSigMethod.MkwWords)
 
     # Distinguish the two method families even when their native values agree.
     for method in (nothing, 0, 1, 2, 3, BranchedLogSigMethod.Expanded, BranchedLogSigMethod.MkwBasis)

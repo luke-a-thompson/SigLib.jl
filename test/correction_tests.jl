@@ -64,10 +64,8 @@ end
         (branched_sig, (;)), (branched_sig, (; planar=true)),
         (branched_log_sig, (;)), (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.Expanded)),
     )
-    if SigLib._modern_abi[]
-        families = (families..., (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.MkwWords)),
-            (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.MkwBasis)))
-    end
+    families = (families..., (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.MkwWords)),
+        (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.MkwBasis)))
     for T in (Float32, Float64), (f, options) in families, time_aug in (false, true)
         paths = reshape(T.(sin.(1:48) ./ 4), 2, 4, 3, 2)
         constant = T[0.01, -0.02, 0.03, -0.04]
@@ -103,11 +101,9 @@ end
         @test branched_log_sig(path, 3; correction=rows, planar=planar, method=BranchedLogSigMethod.Expanded) ≈
             branched_sig_to_log_sig(branched_sig(path, 3; correction=rows, planar=planar), 2, 3; planar=planar, method=BranchedLogSigMethod.Expanded)
     end
-    if SigLib._modern_abi[]
-        for method in (BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis)
-            @test branched_log_sig(path, 3; correction=rows, planar=true, method=method) ≈
-                branched_sig_to_log_sig(branched_sig(path, 3; correction=rows, planar=true), 2, 3; planar=true, method=method)
-        end
+    for method in (BranchedLogSigMethod.MkwWords, BranchedLogSigMethod.MkwBasis)
+        @test branched_log_sig(path, 3; correction=rows, planar=true, method=method) ≈
+            branched_sig_to_log_sig(branched_sig(path, 3; correction=rows, planar=true), 2, 3; planar=true, method=method)
     end
 end
 
@@ -131,18 +127,14 @@ end
     @test_throws ArgumentError log_sig(path, 3; correction=ones(4), method=LogSigMethod.DirectBCH)
     @test log_sig(path, 3; correction=Float64[], method=LogSigMethod.DirectBCH) ≈ log_sig(path, 3; method=LogSigMethod.DirectBCH)
     @test_throws ArgumentError rrule(log_sig, path, 3; correction=ones(4), method=LogSigMethod.DirectBCH)
-    if SigLib._modern_abi[]
-        @test_throws ArgumentError branched_log_sig(path, 3; correction=ones(4), planar=true, method=BranchedLogSigMethod.DirectBCH)
-        @test_throws ArgumentError rrule(branched_log_sig, path, 3; correction=ones(4), planar=true, method=BranchedLogSigMethod.DirectBCH)
-    end
+    @test_throws ArgumentError branched_log_sig(path, 3; correction=ones(4), planar=true, method=BranchedLogSigMethod.DirectBCH)
+    @test_throws ArgumentError rrule(branched_log_sig, path, 3; correction=ones(4), planar=true, method=BranchedLogSigMethod.DirectBCH)
 end
 
-@testset "upstream nonplanar zero-correction discrepancy" begin
-    # Verified with cpSIG 3.1 and 4.0: the correction exponential differs from
-    # the straight-line fast path at degree 3. Forward native behavior unchanged.
+@testset "nonplanar zero-correction identity" begin
     path = [0.0 0.5 1.0; 0.0 1.0 -0.25]
-    @test_broken branched_sig(path, 3; correction=zeros(4, 2)) ≈ branched_sig(path, 3)
-    @test_broken branched_log_sig(path, 3; correction=zeros(4, 2)) ≈ branched_log_sig(path, 3)
+    @test branched_sig(path, 3; correction=zeros(4, 2)) ≈ branched_sig(path, 3)
+    @test branched_log_sig(path, 3; correction=zeros(4, 2)) ≈ branched_log_sig(path, 3)
 end
 
 @testset "corrected path pullbacks" begin
@@ -154,10 +146,8 @@ end
     families = ((sig, (;)), (log_sig, (; method=LogSigMethod.Expanded)), (log_sig, (; method=LogSigMethod.LyndonWords)), (log_sig, (; method=LogSigMethod.LyndonBasis)),
         (branched_sig, (;)), (branched_sig, (; planar=true)),
         (branched_log_sig, (;)), (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.Expanded)))
-    if SigLib._modern_abi[]
-        families = (families..., (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.MkwWords)),
-            (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.MkwBasis)))
-    end
+    families = (families..., (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.MkwWords)),
+        (branched_log_sig, (; planar=true, method=BranchedLogSigMethod.MkwBasis)))
     for (f, options) in families, (p, correction) in ((path, rows[:, 1]), (path, rows), (paths, specific)), time_aug in (false, true)
         kwargs = (; options..., correction, time_aug, scalar_term=true, end_time=0.7)
         y, back = rrule(f, p, 3; kwargs...)
