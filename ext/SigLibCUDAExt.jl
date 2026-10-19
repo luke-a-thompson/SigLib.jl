@@ -9,6 +9,7 @@ const _last_error = Ref{Ptr{Cvoid}}(C_NULL)
 _context(x::CuArray) = CUDA.context(x)
 _context(x::AnyCuArray) = _context(parent(x))
 SigLib._backend(::AnyCuArray) = :cuda
+SigLib._is_dense_buffer(::CuArray) = true
 SigLib._with_array(f, x::AnyCuArray) = CUDA.context!(f, _context(x))
 SigLib._materialize(x::AnyCuArray, ::Type{T}) where {T} = x isa CuArray{T} ? x : CuArray{T}(x)
 function SigLib._check_backend(like::AnyCuArray, x::AnyCuArray)

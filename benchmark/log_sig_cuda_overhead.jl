@@ -86,14 +86,14 @@ function compare(::Type{T}, batch, len, dim, degree, method::LogSigMethod.T; sam
     @assert isapprox(Array(wrapped_call()), expected)
     @assert isapprox(Array(raw_call()), expected)
     @assert isapprox(Array(public_call()), log_sig(host, degree; method); rtol=T == Float32 ? 2e-4 : 2e-10, atol=T == Float32 ? 2e-5 : 2e-11)
-    ws = LogSigWorkspace(path, degree; method)
-    workspace_call = () -> begin
-        result = log_sig!(ws, path)
+    result_buffer = similar(out)
+    inplace_call = () -> begin
+        result = log_sig!(result_buffer, path, degree, sig_buffer; method)
         CUDA.device_synchronize()
         result
     end
-    @assert Array(workspace_call()) ≈ expected
-    variants = ("bare_ccall" => raw_call, "preallocated_wrappers" => wrapped_call, "log_sig!" => workspace_call, "log_sig" => public_call)
+    @assert Array(inplace_call()) ≈ expected
+    variants = ("bare_ccall" => raw_call, "preallocated_wrappers" => wrapped_call, "log_sig!" => inplace_call, "log_sig" => public_call)
     for (_, f) in variants
         for _ in 1:30
             f()
@@ -139,7 +139,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("# CUDA library: ", Libdl.dlpath(EXT._library()))
     println("# Inputs stay on GPU; warmed caches and kernels; completed wall-clock work per call; no host/device copies in timed loops.")
     println("# Native C uses preallocated device buffers and synchronizes each completed log-signature call. Matched checks adds Julia's per-native-call barriers and repeated cache preparation.")
-    println("# preallocated_wrappers uses existing internal CUDA wrappers; log_sig! uses the public CPU/CUDA workspace.")
+    println("# preallocated_wrappers uses existing internal CUDA wrappers; log_sig! uses the public CPU/CUDA buffer API.")
     println("dtype,public_shape,degree,method,variant,median_us,paired_overhead_us,paired_overhead_pct,julia_host_alloc_bytes")
     for degree in (4, 5), method in (LogSigMethod.LyndonWords, LogSigMethod.DirectBCH)
         compare(Float64, 4, 32, 3, degree, method)

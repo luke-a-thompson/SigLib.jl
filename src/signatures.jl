@@ -20,8 +20,20 @@ means no correction. The correction must use the path's eltype and backend.
 Time augmentation adds no correction to the time channel. Non-empty corrections
 cannot be combined with `lead_lag=true`. Path gradients treat corrections as constants.
 """
-function sig(
-    path::AbstractArray{T,N},
+sig(path::AbstractArray, degree::Integer; kwargs...) = _sig(nothing, path, degree; kwargs...)
+
+"""
+    sig!(out, path, degree; kwargs...)
+
+Write [`sig`](@ref) into `out` and return it. Accepts the same keywords as `sig`.
+`out` must be a dense array with the result's shape and the path's eltype and
+backend, without aliasing the path or correction. Warmed rank-3 CPU calls reuse
+all Julia storage; input views may be materialized.
+"""
+sig!(out::AbstractArray, path::AbstractArray, degree::Integer; kwargs...) = _sig(out, path, degree; kwargs...)
+
+function _sig(
+    destination, path::AbstractArray{T,N},
     degree::Integer;
     time_aug::Bool=false,
     lead_lag::Bool=false,
@@ -35,33 +47,11 @@ function sig(
     _as_cint_n_jobs(n_jobs)
     path_c, batch_shape, batch_size, dimension, len = _path_buffer(path)
     correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, degree, lead_lag)
-    out = _sig_from_buffer(
-        path_c, batch_size, dimension, len, degree;
-        time_aug=time_aug, lead_lag=lead_lag, end_time=end_time,
-        horner=horner, scalar_term=scalar_term, correction=correction_c, n_jobs=n_jobs,
-    )
-    return _format_signature_output(out, batch_shape)
-end
-
-function _sig_from_buffer(
-    path_c::AbstractArray{T,3}, batch_size, dimension, len, degree;
-    time_aug=false, lead_lag=false, end_time=1.0, horner=true, scalar_term=false,
-    correction::_CorrectionBuffer=_CorrectionBuffer(), n_jobs=1,
-) where {T<:Union{Float32,Float64}}
-    siglen = sig_length(
-        dimension, degree;
-        time_aug=time_aug, lead_lag=lead_lag, scalar_term=scalar_term,
-    )
-    out = _allocate(path_c, siglen, batch_size)
-
-    if batch_size != 0 && siglen != 0
-        _signature_c!(
-            out, path_c, batch_size, dimension, len, degree,
-            time_aug, lead_lag, horner, scalar_term, n_jobs, end_time, correction,
-        )
-    end
-
-    return out
+    siglen = sig_length(dimension, degree; time_aug, lead_lag, scalar_term)
+    out = _output_buffer(destination, path_c, siglen, batch_shape, batch_size, "out", (path, correction))
+    isempty(out) || _signature_c!(out, path_c, batch_size, dimension, len, degree,
+        time_aug, lead_lag, horner, scalar_term, n_jobs, end_time, correction_c)
+    return destination === nothing ? _format_signature_output(out, batch_shape) : destination
 end
 
 function _sig_backprop(

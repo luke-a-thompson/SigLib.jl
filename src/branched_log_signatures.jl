@@ -36,15 +36,16 @@ function branched_sig_to_log_sig(
     _as_cint_n_jobs(n_jobs)
     bsig_c, batch_shape, batch_size, d, scalar_term, outlen =
         _branched_log_sig_input(bsig, dimension, degree, time_aug, lead_lag, planar, method)
-    out = _branched_sig_to_log_sig_from_buffer(bsig_c, batch_size, d, degree, method, planar, scalar_term, outlen, n_jobs)
+    out = _allocate(bsig_c, outlen, batch_size)
+    _branched_sig_to_log_sig_from_buffer!(out, bsig_c, batch_size, d, degree, method, planar, scalar_term, n_jobs)
     return _format_signature_output(out, batch_shape)
 end
 
-function _branched_sig_to_log_sig_from_buffer(bsig_c, batch_size, d, degree, method, planar, scalar_term, outlen, n_jobs)
-    out = _allocate(bsig_c, outlen, batch_size)
-    if batch_size != 0 && outlen != 0
+function _branched_sig_to_log_sig_from_buffer!(out, bsig_c, batch_size, d, degree, method, planar, scalar_term, n_jobs)
+    isempty(out) && return out
+    _with_array(bsig_c) do
         lock(_cache_lock) do
-            _prepare_branched_log_sig_for(bsig_c, d, degree, method; planar=planar)
+            _cache_call(Val(_backend(bsig_c)), Val(:prepare_branched_log_sig), UInt64(d), UInt64(degree), method, planar, false)
             _branched_sig_to_log_sig_c!(out, bsig_c, batch_size, d, degree, planar, scalar_term, n_jobs, method)
         end
     end
@@ -56,8 +57,23 @@ end
 
 Compute branched log signatures using a [`BranchedLogSigMethod`](@ref), defaulting to `MkwWords` for planar paths and `Expanded` otherwise. All except `Expanded` require `planar=true` and ignore `scalar_term`; `DirectBCH` computes MKW basis coordinates directly through BCH. `correction` accepts the layouts described in [`branched_sig`](@ref). Use `Expanded` to retain the full Hopf logarithm for non-Lie corrections. `DirectBCH` accepts only absent or empty corrections.
 """
-function branched_log_sig(
-    path::AbstractArray{T,N}, degree::Integer;
+branched_log_sig(path::AbstractArray, degree::Integer; kwargs...) =
+    _branched_log_sig(nothing, nothing, path, degree; kwargs...)
+
+"""
+    branched_log_sig!(out, path, degree, scratch=nothing; kwargs...)
+
+Write [`branched_log_sig`](@ref) into `out` and return it, using the same keywords.
+Supply `scratch` with the shape of `branched_sig(path, degree; ...)`, including
+its scalar-term format. `DirectBCH` needs no scratch. Both buffers follow
+[`sig!`](@ref)'s requirements and must not alias each other. Direct BCH path
+transforms may allocate; untransformed warmed rank-3 CPU calls reuse Julia storage.
+"""
+branched_log_sig!(out::AbstractArray, path::AbstractArray, degree::Integer, scratch=nothing; kwargs...) =
+    _branched_log_sig(out, scratch, path, degree; kwargs...)
+
+function _branched_log_sig(
+    destination, scratch, path::AbstractArray{T,N}, degree::Integer;
     time_aug::Bool=false, lead_lag::Bool=false, end_time::Real=1.0,
     planar::Bool=false, scalar_term::Bool=false, method::BranchedLogSigMethod.T=planar ? BranchedLogSigMethod.MkwWords : BranchedLogSigMethod.Expanded,
     correction=nothing, n_jobs::Integer=1,
@@ -68,27 +84,43 @@ function branched_log_sig(
     _as_cint_n_jobs(n_jobs)
     path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :branched_log_sig)
     correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, degree, lead_lag)
+    direct = method == BranchedLogSigMethod.DirectBCH
+    direct && _validate_bch_correction(correction_c, :branched_log_sig)
+    destination !== nothing && !direct && scratch === nothing &&
+        throw(ArgumentError("supply a branched-signature scratch buffer for this method"))
     d = _effective_dimension(dimension, time_aug, lead_lag)
-    if method == BranchedLogSigMethod.DirectBCH
-        _validate_bch_correction(correction_c, :branched_log_sig)
-        outlen = branched_log_sig_length(d, degree; planar=true)
-        out = _allocate(path_c, outlen, batch_size)
-        if batch_size != 0 && outlen != 0
-            lock(_cache_lock) do
-                transformed_path, d, len = _transformed_path_for_log_sig(
+    siglen = direct ? 0 : branched_sig_length(d, degree; planar, scalar_term)
+    outlen = method == BranchedLogSigMethod.Expanded ? siglen : branched_log_sig_length(d, degree; planar=true)
+    out = _output_buffer(destination, path_c, outlen, batch_shape, batch_size, "out", (path, correction))
+    bsig_c = direct ? nothing : _output_buffer(scratch, path_c, siglen, batch_shape, batch_size, "scratch", (out, path, correction))
+    _branched_log_sig_from_buffers!(out, bsig_c, path_c, batch_size, dimension, len, degree, method,
+        correction_c.data, correction_c.length, correction_c.batch_stride, correction_c.segment_stride;
+        time_aug, lead_lag, end_time, planar, scalar_term, n_jobs)
+    return destination === nothing ? _format_signature_output(out, batch_shape) : destination
+end
+
+function _branched_log_sig_from_buffers!(out, bsig_c, path_c, batch_size, dimension, len, degree, method,
+    correction_data, correction_length, correction_batch_stride, correction_segment_stride;
+    time_aug=false, lead_lag=false, end_time=1.0, planar=false, scalar_term=false, n_jobs=1,
+)
+    isempty(out) && return out
+    _with_array(path_c) do
+        lock(_cache_lock) do
+            if method == BranchedLogSigMethod.DirectBCH
+                transformed_path, d, transformed_len = _transformed_path_for_log_sig(
                     path_c, batch_size, dimension, len, time_aug, lead_lag, end_time, n_jobs)
-                _prepare_branched_log_sig_for(path_c, d, degree, BranchedLogSigMethod.DirectBCH; planar=true)
-                _branched_log_sig_from_path_c!(out, transformed_path, batch_size, len, d, degree, n_jobs)
+                _cache_call(Val(_backend(path_c)), Val(:prepare_branched_log_sig), UInt64(d), UInt64(degree), method, planar, false)
+                _branched_log_sig_from_path_c!(out, transformed_path, batch_size, transformed_len, d, degree, n_jobs)
+            else
+                _branched_sig_from_buffer!(bsig_c, path_c, batch_size, dimension, len, degree,
+                    correction_data, correction_length, correction_batch_stride, correction_segment_stride;
+                    time_aug, lead_lag, end_time, planar, scalar_term, n_jobs)
+                _branched_sig_to_log_sig_from_buffer!(out, bsig_c, batch_size,
+                    _effective_dimension(dimension, time_aug, lead_lag), degree, method, planar, scalar_term, n_jobs)
             end
         end
-        return _format_signature_output(out, batch_shape)
     end
-    bsig_c = _branched_sig_from_buffer(path_c, batch_size, dimension, len, degree;
-        time_aug=time_aug, lead_lag=lead_lag, end_time=end_time,
-        planar=planar, scalar_term=scalar_term, correction=correction_c, n_jobs=n_jobs)
-    outlen = method == BranchedLogSigMethod.Expanded ? size(bsig_c, 1) : branched_log_sig_length(d, degree; planar=true)
-    out = _branched_sig_to_log_sig_from_buffer(bsig_c, batch_size, d, degree, method, planar, scalar_term, outlen, n_jobs)
-    return _format_signature_output(out, batch_shape)
+    return out
 end
 
 function _branched_sig_to_log_sig_backprop(

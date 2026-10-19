@@ -20,7 +20,7 @@ end
 
 function _validate_log_sig_conversion_method(method::LogSigMethod.T)
     method == LogSigMethod.DirectBCH && throw(ArgumentError(
-        "LogSigMethod.DirectBCH requires log_sig(path, degree) or LogSigWorkspace"))
+        "LogSigMethod.DirectBCH requires log_sig(path, degree) or log_sig!"))
     return nothing
 end
 
@@ -42,7 +42,7 @@ end
 
 _CorrectionBuffer() = _CorrectionBuffer(nothing, UInt64(0), UInt64(0), UInt64(0))
 
-function _correction_buffer(correction, like, batch_shape, batch_size, dimension, len, degree, lead_lag)
+@inline function _correction_buffer(correction, like, batch_shape, batch_size, dimension, len, degree, lead_lag)
     correction === nothing && return _CorrectionBuffer()
     correction isa AbstractArray || throw(ArgumentError("correction must be an array or nothing"))
     eltype(correction) === eltype(like) ||
@@ -154,6 +154,23 @@ function _signature_buffer(
 
         _check_backend(like, x)
         return _reshape_buffer(_materialize(x, T), (siglen, batch_size))
+    end
+end
+
+_is_dense_buffer(::Array) = true
+_is_dense_buffer(::AbstractArray) = false
+
+function _output_buffer(out, like, siglen, batch_shape, batch_size, name, inputs::Tuple)
+    out === nothing && return _allocate(like, siglen, batch_size)
+    eltype(out) === eltype(like) || throw(ArgumentError("$name and path must have the same eltype"))
+    size(out) == (siglen, batch_shape...) || throw(DimensionMismatch("$name has the wrong shape"))
+    _is_dense_buffer(out) || throw(ArgumentError("$name must be a dense array"))
+    _check_backend(like, out)
+    # Map first to avoid boxing heterogeneous tuple elements on Julia 1.10.
+    any(map(x -> x !== nothing && Base.mightalias(out, x), (like, inputs...))) &&
+        throw(ArgumentError("$name must not alias inputs or other buffers"))
+    return _with_array(like) do
+        _reshape_buffer(out, (siglen, batch_size))
     end
 end
 

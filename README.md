@@ -5,11 +5,14 @@
 ```julia
 using SigLib
 path = [0.0 0.5 1.0; 0.0 1.0 -0.25] # (dimension, length)
-sig(path, 2)
-log_sig(path, 2; method=LogSigMethod.LyndonBasis)
-workspace = LogSigWorkspace(path, 2; method=LogSigMethod.LyndonBasis)
-log_sig!(workspace, path) # reuse buffers for subsequent paths of the same shape
-branched_sig(path, 2)
+s = sig(path, 2)
+sig!(s, path, 2) # reuse output storage
+l = log_sig(path, 2; method=LogSigMethod.LyndonBasis)
+log_sig!(l, path, 2, s; method=LogSigMethod.LyndonBasis) # reuse output and scratch
+bs = branched_sig(path, 2)
+branched_sig!(bs, path, 2)
+bl = similar(bs)
+branched_log_sig!(bl, path, 2, bs) # bs is reusable scratch storage
 sig(path, 3; correction=[-0.01, 0.0, 0.0, -0.01]) # local level-2 correction
 lyndon_brackets(2, 3) # standard brackets in LyndonBasis/DirectBCH coordinate order
 trees(2, 3) # BCK trees; planar=true gives MKW ordered forests

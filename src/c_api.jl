@@ -1,8 +1,8 @@
-# Concrete Float32/Float64 methods keep the ABI explicit without duplicate wrappers.
+# Concrete Float32/Float64 wrappers keep the ABI explicit; inlining avoids boxing correction metadata.
 
 for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:signature_, suffix))
-    @eval function _signature_c!(
+    @eval @inline function _signature_c!(
         out::Matrix{$T},
         path::Array{$T,3},
         batch_size::Integer,
@@ -379,7 +379,7 @@ end
 
 for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:branched_sig_, suffix))
-    @eval function _branched_sig_c!(
+    @eval @inline function _branched_sig_c!(
         out::Matrix{$T},
         path::Array{$T,3},
         batch_size::Integer,

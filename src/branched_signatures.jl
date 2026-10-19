@@ -15,8 +15,20 @@ The public shape convention uses channels first and batch dimensions last:
 `degree = max_nodes`. Each word supplies a chain tree labeled from root to leaf
 in the local Hopf exponential. Corrections are constant during path differentiation.
 """
-function branched_sig(
-    path::AbstractArray{T,N},
+branched_sig(path::AbstractArray, degree::Integer; kwargs...) = _branched_sig(nothing, path, degree; kwargs...)
+
+"""
+    branched_sig!(out, path, max_nodes; kwargs...)
+
+Write [`branched_sig`](@ref) into `out` and return it, using the same keywords.
+Buffer requirements match [`sig!`](@ref). Native caches prepare automatically,
+including after `clear_log_sig_cache()`.
+"""
+branched_sig!(out::AbstractArray, path::AbstractArray, degree::Integer; kwargs...) =
+    _branched_sig(out, path, degree; kwargs...)
+
+function _branched_sig(
+    destination, path::AbstractArray{T,N},
     max_nodes::Integer;
     time_aug::Bool=false,
     lead_lag::Bool=false,
@@ -30,36 +42,29 @@ function branched_sig(
     _as_cint_n_jobs(n_jobs)
     path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :branched_sig)
     correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, max_nodes, lead_lag)
-    out = _branched_sig_from_buffer(path_c, batch_size, dimension, len, max_nodes;
-        time_aug=time_aug, lead_lag=lead_lag, end_time=end_time, planar=planar,
-        scalar_term=scalar_term, correction=correction_c, n_jobs=n_jobs)
-    return _format_signature_output(out, batch_shape)
+    siglen = branched_sig_length(dimension, max_nodes; time_aug, lead_lag, planar, scalar_term)
+    out = _output_buffer(destination, path_c, siglen, batch_shape, batch_size, "out", (path, correction))
+    _branched_sig_from_buffer!(out, path_c, batch_size, dimension, len, max_nodes,
+        correction_c.data, correction_c.length, correction_c.batch_stride, correction_c.segment_stride;
+        time_aug, lead_lag, end_time, planar, scalar_term, n_jobs)
+    return destination === nothing ? _format_signature_output(out, batch_shape) : destination
 end
 
-function _branched_sig_from_buffer(
-    path_c::AbstractArray{T,3}, batch_size, dimension, len, max_nodes;
-    time_aug=false, lead_lag=false, end_time=1.0, planar=false, scalar_term=false,
-    correction::_CorrectionBuffer=_CorrectionBuffer(), n_jobs=1,
-) where {T<:Union{Float32,Float64}}
-    siglen = branched_sig_length(
-        dimension, max_nodes;
-        time_aug=time_aug, lead_lag=lead_lag, planar=planar, scalar_term=scalar_term,
-    )
-    out = _allocate(path_c, siglen, batch_size)
-
-    if batch_size != 0 && siglen != 0
+# Pass correction fields across the lock callback to avoid boxing metadata.
+function _branched_sig_from_buffer!(out, path_c, batch_size, dimension, len, max_nodes,
+    correction_data, correction_length, correction_batch_stride, correction_segment_stride;
+    time_aug=false, lead_lag=false, end_time=1.0, planar=false, scalar_term=false, n_jobs=1,
+)
+    isempty(out) && return out
+    _with_array(path_c) do
         lock(_cache_lock) do
-            _prepare_branched_sig_for(path_c,
-                dimension, max_nodes;
-                time_aug=time_aug, lead_lag=lead_lag, planar=planar,
-            )
-            _branched_sig_c!(
-                out, path_c, batch_size, dimension, len, max_nodes,
-                time_aug, lead_lag, planar, scalar_term, n_jobs, end_time, correction,
-            )
+            _cache_call(Val(_backend(path_c)), Val(:prepare_branched_sig),
+                _effective_dimension(dimension, time_aug, lead_lag), UInt64(max_nodes), planar, false)
+            _branched_sig_c!(out, path_c, batch_size, dimension, len, max_nodes,
+                time_aug, lead_lag, planar, scalar_term, n_jobs, end_time,
+                _CorrectionBuffer(correction_data, correction_length, correction_batch_stride, correction_segment_stride))
         end
     end
-
     return out
 end
 

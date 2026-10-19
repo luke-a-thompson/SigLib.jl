@@ -7,6 +7,7 @@ The implemented API covers standard and branched signatures, log signatures, con
 ```julia
 sig_length(dimension, degree; scalar_term=false)
 sig(path, degree; scalar_term=false, correction=nothing, n_jobs=1)
+sig!(out, path, degree; kwargs...)
 log_sig_length(dimension, degree; time_aug=false, lead_lag=false)
 prepare_log_sig(dimension, degree, method; time_aug=false, lead_lag=false)
 set_cache_dir(directory)
@@ -21,9 +22,11 @@ prepare_branched_sig(dimension, max_nodes; planar=false)
 branched_log_sig_length(dimension, degree; planar=false)
 prepare_branched_log_sig(dimension, degree, method; planar=false)
 branched_sig(path, max_nodes; planar=false, scalar_term=false, correction=nothing, n_jobs=1)
+branched_sig!(out, path, max_nodes; kwargs...)
 branched_sig_combine(bsig1, bsig2, dimension, max_nodes; planar=false)
 branched_sig_to_log_sig(bsig, dimension, degree; planar=false, method=planar ? BranchedLogSigMethod.MkwWords : BranchedLogSigMethod.Expanded, n_jobs=1)
 branched_log_sig(path, degree; planar=false, scalar_term=false, method=planar ? BranchedLogSigMethod.MkwWords : BranchedLogSigMethod.Expanded, correction=nothing, n_jobs=1)
+branched_log_sig!(out, path, degree, scratch=nothing; kwargs...)
 ```
 
 Paths use `(dimension, length)` for one path and `(dimension, length, batch...)` for batches. Outputs have shape `(coefficients,)` or `(coefficients, batch...)`. Channels and coefficients come first; batch dimensions come last. This convention applies to CPU and CUDA arrays, conversions, composition operations, displacements, and gradients. Dense inputs go directly to the native library, and outputs share native storage without layout conversions. Inputs must contain `Float32` or `Float64`; views are accepted. Binary operations convert the second input to the first input's precision. Degree zero and empty batches are supported, but a path must have at least one point and one channel. The scalar signature term is excluded by default.
@@ -59,18 +62,19 @@ The `method` argument accepts scoped enum values, with distinct types for ordina
 
 For ordinary log signatures, `LogSigMethod.Expanded` returns tensor logarithms, `LyndonWords` extracts Lyndon-word coordinates (the default), `LyndonBasis` returns Lyndon-basis coordinates, and `DirectBCH` computes Lyndon-basis coordinates directly through BCH. Combine/join expect `LyndonBasis` or `DirectBCH` coordinates. All except `Expanded` use compressed outputs and ignore `scalar_term`. Signature/log-signature conversions accept `Expanded`, `LyndonWords`, or `LyndonBasis`; `DirectBCH` requires a path.
 
-For repeated CPU or CUDA calls of the same shape and precision, `LogSigWorkspace` reuses the intermediate signature and output buffers; dense paths are passed directly to the native library. It supports `Float32` and `Float64`, views, and all `LogSigMethod` values with the usual array shapes. The workspace API computes untransformed paths without corrections or a scalar term; use `log_sig` for those options. Degree and method are fixed at construction, and `n_jobs` can be changed per call.
+`sig!` and `branched_sig!` write into caller-owned output arrays. `log_sig!` and `branched_log_sig!` also take a caller-owned signature scratch array, except for `DirectBCH`, which needs only the output. Each accepts the same keywords as its allocating counterpart and returns the original output array. Scratch has the shape of `sig(path, degree; ...)` or `branched_sig(path, degree; ...)` with matching transforms and scalar-term options; ordinary logs include the scalar term in scratch only for `Expanded` with `scalar_term=true`. Outputs and scratch must be dense arrays of the correct shape, eltype, backend, and CUDA context; they must not alias each other, the path, or corrections. Input views are accepted and may be materialized. Native caches prepare automatically, including after clearing.
 
 ```julia
-path = randn(3, 32, 4)
-workspace = LogSigWorkspace(path, 5; method=LogSigMethod.LyndonWords)
-result = log_sig!(workspace, path)
-saved = copy(result)             # retain a result across later calls
-path .*= 0.7
-log_sig!(workspace, path)         # overwrites result; saved keeps the previous value
+s = sig(path, 3)                       # allocate buffers once
+l = log_sig(path, 3)
+sig!(s, path, 3)                       # subsequent calls overwrite the output
+log_sig!(l, path, 3, s)                # s is reusable signature scratch
+scratch = branched_sig(path, 3)
+b = similar(scratch)                   # expanded nonplanar log has the same length
+branched_log_sig!(b, path, 3, scratch)
 ```
 
-The returned array belongs to the workspace and is overwritten on each call. Use a separate workspace for each concurrent computation. Native cache preparation and clearing remain synchronized; a workspace remains usable after `clear_log_sig_cache()`. The warmed call allocates no Julia memory for dense rank-3 CPU paths; CUDA calls reuse device storage.
+After warm-up, dense rank-3 CPU calls with preallocated buffers allocate no Julia memory, including supported corrections. Direct BCH with time augmentation or lead-lag still allocates transformed-path storage. Native library workspaces are managed separately; these guarantees concern Julia allocations. Use separate buffers for concurrent calls and copy an output to retain its value before the next call.
 
 Branched log signatures default to `BranchedLogSigMethod.Expanded` for nonplanar paths and `BranchedLogSigMethod.MkwWords` for planar paths. `Expanded` returns the full Hopf logarithm; `MkwWords` returns extracted weighted Lyndon coordinates and `MkwBasis` returns MKW basis coordinates. `DirectBCH` computes the same coordinates as `MkwBasis` directly through BCH. Conversion from a branched signature accepts every branched method except `DirectBCH` and infers the scalar term from the input length; `Expanded` preserves that format, while compressed outputs are scalar-free. `branched_log_sig_length` returns the nonplanar tree count or the compressed planar length. All except `Expanded` require `planar=true`.
 
@@ -136,7 +140,7 @@ Enumeration materializes the requested basis, so memory grows with the number of
 
 ## CUDA
 
-Install CUDA.jl 5.x and pass `CuArray` inputs to the numerical functions or `LogSigWorkspace`. The allocating functions and their ChainRules pullbacks run through native cuSIG; results and gradients stay on the GPU. Load ChainRulesCore when derivatives are needed.
+Install CUDA.jl 5.x and pass `CuArray` inputs to the numerical functions. The allocating functions and their ChainRules pullbacks run through native cuSIG; results and gradients stay on the GPU. Load ChainRulesCore when derivatives are needed.
 
 ```julia
 using SigLib, CUDA, ChainRulesCore
@@ -145,8 +149,8 @@ sig(path, 3)                              # CuVector
 branched_log_sig(path, 3; planar=true)     # CuVector
 batch = CUDA.randn(Float32, 3, 32, 4)     # 4 paths, 32 points, 3 channels
 log_sig(batch, 5)                         # CuMatrix: (coefficients, 4)
-workspace = LogSigWorkspace(batch, 5)
-log_sig!(workspace, batch)                # reuse intermediate and output storage
+out, scratch = log_sig(batch, 5), sig(batch, 5)
+log_sig!(out, batch, 5, scratch)          # reuse intermediate and output storage
 clear_log_sig_cache(; device=:cuda)
 ```
 
@@ -163,7 +167,7 @@ julia --project=test/cuda --threads=4 test/cuda/runtests.jl
 
 ## Benchmarks
 
-The Linux harnesses in `benchmark/` compare native C calls with the allocating Julia API and reusable workspaces. They require `g++`; the CUDA harness also needs CUDA.jl, a working NVIDIA GPU, the CUDA SDK, and matching 4.x native artifacts or local artifact overrides. Set `SIGLIB_BENCH_CUDA_ROOT` if the SDK is outside `/usr/local/cuda`.
+The Linux harnesses in `benchmark/` compare native C calls with the allocating Julia API and caller-owned buffers. They require `g++`; the CUDA harness also needs CUDA.jl, a working NVIDIA GPU, the CUDA SDK, and matching 4.x native artifacts or local artifact overrides. Set `SIGLIB_BENCH_CUDA_ROOT` if the SDK is outside `/usr/local/cuda`.
 
 ```sh
 julia --project=. benchmark/log_sig_overhead.jl
@@ -173,7 +177,7 @@ julia --project=test/cuda benchmark/log_sig_cuda_overhead.jl
 
 Timings exclude compilation and initial cache construction. The native C baseline uses preallocated buffers; allocating Julia calls include allocation and cache checks. CUDA timings synchronize completed work and exclude host/device transfers. Overhead percentages use the median paired Julia-minus-C difference, which can differ from the difference between separately reported medians.
 
-Files ending in `_batch_last_results.csv` record the current layout. Other CSV files retain measurements from the earlier batch-first API; `log_sig_workspace_results.csv` contains prototype experiments rather than the exported workspace API. Snapshot headers record the environment and validation, including the interrupted final CUDA BCH timing. The scripts use the current API and will produce new measurements when rerun.
+Files ending in `_batch_last_results.csv` record the current layout. Other CSV files retain measurements from the earlier batch-first API; `log_sig_workspace_results.csv` contains historical workspace experiments. Snapshot headers record the environment and validation, including the interrupted final CUDA BCH timing. Historical CSVs may refer to the removed `LogSigWorkspace` API. The scripts use the current API and will produce new measurements when rerun.
 
 ## Native artifacts
 

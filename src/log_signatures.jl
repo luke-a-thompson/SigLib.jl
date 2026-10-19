@@ -209,8 +209,23 @@ Compute the log signature of one path or a batch of paths.
 to preserve the full tensor logarithm for non-Lie corrections such as the Ito
 lift. Non-empty corrections are unsupported with the direct BCH `method=LogSigMethod.DirectBCH`.
 """
-function log_sig(
-    path::AbstractArray{T,N},
+log_sig(path::AbstractArray, degree::Integer; kwargs...) = _log_sig(nothing, nothing, path, degree; kwargs...)
+
+"""
+    log_sig!(out, path, degree, scratch=nothing; kwargs...)
+
+Write [`log_sig`](@ref) into `out`, using the same keywords. Supply `scratch`
+with the shape of `sig(path, degree; ...)`; its scalar term is included only
+for `Expanded` with `scalar_term=true`. `DirectBCH` needs no scratch.
+Buffers follow [`sig!`](@ref)'s requirements and must not alias each other.
+Direct BCH path transforms may allocate; warmed dense rank-3 CPU calls without
+transforms reuse Julia storage. Native caches prepare automatically after clearing.
+"""
+log_sig!(out::AbstractArray, path::AbstractArray, degree::Integer, scratch=nothing; kwargs...) =
+    _log_sig(out, scratch, path, degree; kwargs...)
+
+function _log_sig(
+    destination, scratch, path::AbstractArray{T,N},
     degree::Integer;
     time_aug::Bool=false,
     lead_lag::Bool=false,
@@ -225,40 +240,48 @@ function log_sig(
     path_c, batch_shape, batch_size, dimension, len = _path_buffer(path, :log_sig)
     correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, degree, lead_lag)
 
-    if method == LogSigMethod.DirectBCH
-        _validate_bch_correction(correction_c, :log_sig)
-        outlen = log_sig_length(dimension, degree; time_aug=time_aug, lead_lag=lead_lag)
-        out = _allocate(path_c, outlen, batch_size)
-        if batch_size != 0 && outlen != 0
-            lock(_cache_lock) do
+    scalar_term = method == LogSigMethod.Expanded && scalar_term
+    method == LogSigMethod.DirectBCH && _validate_bch_correction(correction_c, :log_sig)
+    outlen = _log_sig_output_length(dimension, degree, method, scalar_term; time_aug, lead_lag)
+    direct = method == LogSigMethod.DirectBCH
+    destination !== nothing && !direct && scratch === nothing &&
+        throw(ArgumentError("supply a signature scratch buffer for this method"))
+    out = _output_buffer(destination, path_c, outlen, batch_shape, batch_size, "out", (path, correction))
+    sig_c = direct ? nothing : _output_buffer(scratch, path_c,
+        sig_length(dimension, degree; time_aug, lead_lag, scalar_term), batch_shape, batch_size, "scratch", (out, path, correction))
+    _log_sig_from_buffers!(out, sig_c, path_c, batch_size, dimension, len, degree, method,
+        correction_c.data, correction_c.length, correction_c.batch_stride, correction_c.segment_stride;
+        time_aug, lead_lag, end_time, scalar_term, n_jobs)
+    return destination === nothing ? _format_signature_output(out, batch_shape) : destination
+end
+
+function _log_sig_from_buffers!(out, sig_c, path_c, batch_size, dimension, len, degree, method,
+    correction_data, correction_length, correction_batch_stride, correction_segment_stride;
+    time_aug=false, lead_lag=false, end_time=1.0, scalar_term=false, n_jobs=1,
+)
+    isempty(out) && return out
+    degree == 0 && return fill!(out, zero(eltype(out)))
+    _with_array(path_c) do
+        lock(_cache_lock) do
+            if method != LogSigMethod.Expanded
+                _cache_call(Val(_backend(path_c)), Val(:prepare_log_sig),
+                    _effective_dimension(dimension, time_aug, lead_lag), UInt64(degree), method, false)
+            end
+            if method == LogSigMethod.DirectBCH
                 transformed_path, transformed_dimension, transformed_len = _transformed_path_for_log_sig(
-                    path_c, batch_size, dimension, len, time_aug, lead_lag, end_time, n_jobs,
-                )
-                _prepare_log_sig_for(path_c, transformed_dimension, degree, LogSigMethod.DirectBCH)
-                _log_sig_from_path_c!(
-                    out, transformed_path, batch_size, transformed_len,
-                    transformed_dimension, degree, n_jobs,
-                )
+                    path_c, batch_size, dimension, len, time_aug, lead_lag, end_time, n_jobs)
+                _log_sig_from_path_c!(out, transformed_path, batch_size, transformed_len,
+                    transformed_dimension, degree, n_jobs)
+            else
+                _signature_c!(sig_c, path_c, batch_size, dimension, len, degree,
+                    time_aug, lead_lag, true, scalar_term, n_jobs, end_time,
+                    _CorrectionBuffer(correction_data, correction_length, correction_batch_stride, correction_segment_stride))
+                _sig_to_log_sig_c!(out, sig_c, batch_size, dimension, degree,
+                    time_aug, lead_lag, method, scalar_term, n_jobs)
             end
         end
-        return _format_signature_output(out, batch_shape)
     end
-
-    sig_scalar_term = method == LogSigMethod.Expanded ? scalar_term : false
-    sig_c = _sig_from_buffer(
-        path_c, batch_size, dimension, len, degree;
-        time_aug=time_aug, lead_lag=lead_lag, end_time=end_time,
-        scalar_term=sig_scalar_term, correction=correction_c, n_jobs=n_jobs,
-    )
-    outlen = _log_sig_output_length(dimension, degree, method, sig_scalar_term; time_aug=time_aug, lead_lag=lead_lag)
-    out = _allocate(path_c, outlen, batch_size)
-    if batch_size != 0 && outlen != 0
-        lock(_cache_lock) do
-            _prepare_log_sig_if_needed(path_c, dimension, degree, method; time_aug=time_aug, lead_lag=lead_lag)
-            _sig_to_log_sig_c!(out, sig_c, batch_size, dimension, degree, time_aug, lead_lag, method, sig_scalar_term, n_jobs)
-        end
-    end
-    return _format_signature_output(out, batch_shape)
+    return out
 end
 
 function _sig_to_log_sig_backprop(

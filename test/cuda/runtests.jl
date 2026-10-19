@@ -165,31 +165,58 @@ if length(collect(CUDA.devices())) > 1
     end
 end
 
-@testset "CUDA batch-last storage and workspace" begin
+@testset "CUDA batch-last storage and in-place logs" begin
     for T in (Float32, Float64), method in instances(LogSigMethod.T)
         host = reshape(T.(sin.(1:120) ./ 4), 2, 5, 3, 4)
         path = CuArray(host)
         @test pointer(SigLib._path_buffer(path)[1]) == pointer(path)
-        ws = LogSigWorkspace(path, 3; method)
+        result_buffer = similar(log_sig(path, 3; method))
+        scratch = method == LogSigMethod.DirectBCH ? nothing : similar(sig(path, 3))
         expected = log_sig(host, 3; method)
-        result = log_sig!(ws, path)
+        result = log_sig!(result_buffer, path, 3, scratch; method)
         @test result isa CuArray && size(result) == size(expected)
-        @test pointer(result) == pointer(ws.logarithm)
+        @test pointer(result) == pointer(result_buffer)
         @test Array(result) ≈ expected
         saved = Array(result)
         path .*= T(0.7)
-        @test log_sig!(ws, path) === result
+        @test log_sig!(result_buffer, path, 3, scratch; method) === result
         @test Array(result) ≈ log_sig(host .* T(0.7), 3; method)
         @test saved ≈ expected
         clear_log_sig_cache(; device=:cuda)
-        @test Array(log_sig!(ws, path)) ≈ log_sig(host .* T(0.7), 3; method)
-        @test_throws ArgumentError log_sig!(ws, host)
-        @test_throws ArgumentError log_sig!(LogSigWorkspace(host, 3; method), path)
+        @test Array(log_sig!(result_buffer, path, 3, scratch; method)) ≈ log_sig(host .* T(0.7), 3; method)
+        @test_throws ArgumentError log_sig!(result_buffer, host, 3, scratch; method)
+        @test_throws ArgumentError log_sig!(Array(result_buffer), path, 3, scratch; method)
         windows = @view path[:, 1:2:5, :, :]
-        @test Array(log_sig!(LogSigWorkspace(windows, 3; method), windows)) ≈ log_sig(host[:, 1:2:5, :, :] .* T(0.7), 3; method)
+        @test Array(log_sig!(similar(log_sig(windows, 3; method)), windows, 3,
+            method == LogSigMethod.DirectBCH ? nothing : similar(sig(windows, 3)); method)) ≈ log_sig(host[:, 1:2:5, :, :] .* T(0.7), 3; method)
         for shape in ((2, 5), (2, 5, 0)), degree in (0, 3)
             small = CuArray(zeros(T, shape))
-            @test Array(log_sig!(LogSigWorkspace(small, degree; method), small)) ≈ log_sig(zeros(T, shape), degree; method)
+            @test Array(log_sig!(similar(log_sig(small, degree; method)), small, degree,
+                method == LogSigMethod.DirectBCH ? nothing : similar(sig(small, degree)); method)) ≈ log_sig(zeros(T, shape), degree; method)
+        end
+    end
+end
+
+@testset "CUDA in-place outputs" begin
+    for T in (Float32, Float64), shape in ((2, 4), (2, 4, 3, 2))
+        host = reshape(T.(sin.(1:prod(shape)) ./ 4), shape)
+        path = CuArray(host)
+        for (f, f!) in ((sig, sig!), (branched_sig, branched_sig!))
+            expected = f(host, 3; time_aug=true)
+            out = CuArray(zeros(T, size(expected)))
+            @test f!(out, path, 3; time_aug=true) === out
+            @test Array(out) ≈ expected
+            @test_throws ArgumentError f!(Array(out), path, 3; time_aug=true)
+            @test_throws ArgumentError f!(out, host, 3; time_aug=true)
+        end
+        for method in instances(BranchedLogSigMethod.T)
+            options = (; method, planar=true, time_aug=true)
+            out = CuArray(branched_log_sig(host, 3; options...))
+            expected = Array(out)
+            scratch = method == BranchedLogSigMethod.DirectBCH ? () : (branched_sig(path, 3; planar=true, time_aug=true),)
+            clear_log_sig_cache(; device=:cuda)
+            @test branched_log_sig!(out, path, 3, scratch...; options...) === out
+            @test Array(out) ≈ expected
         end
     end
 end

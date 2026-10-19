@@ -12,7 +12,6 @@
     @test sig_to_log_sig(signature, 2, 3) ==
         sig_to_log_sig(signature, 2, 3; method=LogSigMethod.LyndonWords)
     @test log_sig_basis(2, 3) == log_sig_basis(2, 3; method=LogSigMethod.LyndonWords)
-    @test LogSigWorkspace(path, 3).method === LogSigMethod.LyndonWords
     @test branched_log_sig(path, 3) ==
         branched_log_sig(path, 3; method=BranchedLogSigMethod.Expanded)
     @test branched_sig_to_log_sig(branched, 2, 3) ==
@@ -22,7 +21,6 @@
 
     for method in instances(LogSigMethod.T)
         @test prepare_log_sig(2, 3, method) === nothing
-        @test LogSigWorkspace(path, 3; method).method === method
     end
     for method in instances(BranchedLogSigMethod.T)
         @test prepare_branched_log_sig(2, 3, method; planar=true) === nothing
@@ -38,7 +36,7 @@
         @test_throws TypeError sig_to_log_sig(signature, 2, 3; method)
         @test_throws TypeError logsig_to_sig(Float64[], 2, 0; method)
         @test_throws TypeError log_sig_basis(2, 3; method)
-        @test_throws TypeError LogSigWorkspace(path, 3; method)
+        @test_throws TypeError log_sig!(zeros(5), path, 3, signature; method)
         @test_throws MethodError prepare_log_sig(2, 3, method)
     end
     for method in (nothing, 0, 1, 2, 3, LogSigMethod.Expanded, LogSigMethod.LyndonBasis)

@@ -9,7 +9,7 @@ Methods for ordinary log signatures. Pass a value as `method=LogSigMethod.Lyndon
 - `DirectBCH`: compute Lyndon-basis coordinates directly from a path through BCH (3).
 
 Values have type `LogSigMethod.T`. Signature/log-signature conversions do not
-accept `DirectBCH`; use `log_sig` or `LogSigWorkspace` for that method.
+accept `DirectBCH`; use `log_sig` or `log_sig!` for that method.
 """
 module LogSigMethod
     @enum T::Int32 Expanded=0 LyndonWords=1 LyndonBasis=2 DirectBCH=3
