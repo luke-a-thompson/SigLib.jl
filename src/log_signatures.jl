@@ -80,7 +80,7 @@ function _log_sig_buffer(
 end
 
 function _transformed_path_for_log_sig(
-    path_c::AbstractArray{T,3},
+    path_c::AbstractArray{T},
     batch_size::Integer,
     dimension::Integer,
     len::Integer,
@@ -247,11 +247,14 @@ function _log_sig(
     destination !== nothing && !direct && scratch === nothing &&
         throw(ArgumentError("supply a signature scratch buffer for this method"))
     out = _output_buffer(destination, path_c, outlen, batch_shape, batch_size, "out", (path, correction))
+    # Keep the scalar in private compressed-log scratch to avoid native staging.
+    # Caller-owned scratch retains the public scalar-free layout.
+    sig_scalar_term = scalar_term || (destination === nothing && !direct && method != LogSigMethod.Expanded)
     sig_c = direct ? nothing : _output_buffer(scratch, path_c,
-        sig_length(dimension, degree; time_aug, lead_lag, scalar_term), batch_shape, batch_size, "scratch", (out, path, correction))
+        sig_length(dimension, degree; time_aug, lead_lag, scalar_term=sig_scalar_term), batch_shape, batch_size, "scratch", (out, path, correction))
     _log_sig_from_buffers!(out, sig_c, path_c, batch_size, dimension, len, degree, method,
         correction_c.data, correction_c.length, correction_c.batch_stride, correction_c.segment_stride;
-        time_aug, lead_lag, end_time, scalar_term, n_jobs)
+        time_aug, lead_lag, end_time, scalar_term=sig_scalar_term, n_jobs)
     return destination === nothing ? _format_signature_output(out, batch_shape) : destination
 end
 
@@ -310,9 +313,9 @@ function _sig_to_log_sig_backprop(
     log_sig_derivs_c = _signature_buffer(
         log_sig_derivs, S, log_sig_len, batch_shape, batch_size, "log_sig_derivs", sig_c,
     )
-    out = _allocate(sig_c, outlen, batch_size)
+    out = _allocate(sig_c, outlen, batch_size; zero=degree == 0)
 
-    if batch_size != 0 && outlen != 0
+    if batch_size != 0 && outlen != 0 && degree != 0
         lock(_cache_lock) do
             _prepare_log_sig_if_needed(
                 sig_c,

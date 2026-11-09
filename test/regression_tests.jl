@@ -70,6 +70,75 @@ end
     end
 end
 
+@testset "dense batch-last storage" begin
+    for T in (Float32, Float64)
+        path = reshape(T.(sin.(1:120)), 2, 5, 12)
+        path_c, batch_shape, batch, dimension, len = SigLib._path_buffer(path)
+        @test path_c === path
+        @test (batch_shape, batch, dimension, len) == ((12,), 12, 2, 5)
+        original = copy(path)
+        coefficients = sig(path, 3)
+        @test size(coefficients) == (sig_length(2, 3), 12)
+        @test SigLib._signature_like_buffer(coefficients, T, sig_length(2, 3), "signature")[1] === coefficients
+        @test SigLib._format_signature_output(coefficients, (12,)) === coefficients
+        @test path == original
+        for i in 1:12
+            @test coefficients[:, i] ≈ sig(path[:, :, i], 3)
+        end
+        multi = reshape(path, 2, 5, 3, 4)
+        multi_c = SigLib._path_buffer(multi)[1]
+        @test multi_c === multi
+        result = SigLib._format_signature_output(coefficients, (3, 4))
+        @test size(result) == (sig_length(2, 3), 3, 4)
+        @test pointer(result) == pointer(coefficients)
+        corrections = zeros(T, 4, 4, 12)
+        @test SigLib._correction_buffer(corrections, path_c, (12,), 12, 2, 5, 3, false).data === corrections
+    end
+end
+
+@testset "contiguous CPU views share storage" begin
+    for T in (Float32, Float64)
+        storage = reshape(T.(sin.(1:240)), 2, 5, 3, 8)
+        singleton_storage = reshape(storage, 2, 5, 1, 24)
+        for path in (view(storage, :, :, 2, 3), view(storage, :, :, :, 3),
+                     view(storage, :, :, :, 3:5), view(singleton_storage, :, :, 1:-1:1, 3:5))
+            @test SigLib._path_buffer(path)[1] === path
+            packed = copy(path)
+            for time_aug in (false, true), lead_lag in (false, true)
+                @test sig(path, 3; time_aug, lead_lag) ≈ sig(packed, 3; time_aug, lead_lag)
+                @test branched_sig(path, 3; time_aug, lead_lag) ≈ branched_sig(packed, 3; time_aug, lead_lag)
+                @test branched_log_sig(path, 3; time_aug, lead_lag) ≈ branched_log_sig(packed, 3; time_aug, lead_lag)
+                for method in instances(LogSigMethod.T)
+                    @test log_sig(path, 3; method, time_aug, lead_lag) ≈ log_sig(packed, 3; method, time_aug, lead_lag)
+                end
+            end
+            coefficients = sig(path, 3)
+            coefficient_storage = cat(coefficients, coefficients; dims=ndims(coefficients) + 1)
+            coefficient_view = selectdim(coefficient_storage, ndims(coefficient_storage), 2)
+            coefficient_buffer = SigLib._signature_like_buffer(coefficient_view, T, size(coefficients, 1), "signature")[1]
+            @test pointer(coefficient_buffer) == pointer(coefficient_view)
+            @test sig_to_log_sig(coefficient_view, size(path, 1), 3) ≈ log_sig(packed, 3)
+        end
+        for path in (view(storage, :, 1:2:5, :, 3:5), view(storage, :, :, :, 5:-1:3),
+                     view(storage, [2, 1], :, :, 3:5), view(storage, 1:2:1, :, 2:2, 3:5))
+            @test SigLib._path_buffer(path)[1] isa Array
+            @test sig(path, 3) ≈ sig(copy(path), 3)
+        end
+        values = view(storage, :, :, :, 3)
+        converted = SigLib._materialize(values, T === Float32 ? Float64 : Float32)
+        @test eltype(converted) !== T
+        @test converted ≈ values
+    end
+end
+
+@testset "log signature return inference" begin
+    for T in (Float32, Float64), shape in ((2, 5), (2, 5, 3), (2, 5, 3, 2))
+        path = reshape(T.(sin.(1:prod(shape))), shape)
+        @test (@inferred log_sig(path, 3)) isa Array{T,length(shape) - 1}
+        @test (@inferred branched_log_sig(path, 3)) isa Array{T,length(shape) - 1}
+    end
+end
+
 @testset "cache lifecycle under concurrent calls" begin
     mktempdir() do directory
         @test set_cache_dir(joinpath(directory, "native")) === nothing
@@ -93,31 +162,5 @@ end
         @test clear_log_sig_cache() === nothing
         @test prepare_log_sig(2, 2, LogSigMethod.LyndonBasis; use_disk=true) === nothing
         @test clear_log_sig_cache(; use_disk=true) === nothing
-    end
-end
-
-@testset "dense batch-last storage" begin
-    for T in (Float32, Float64)
-        path = reshape(T.(sin.(1:120)), 2, 5, 12)
-        path_c, batch_shape, batch, dimension, len = SigLib._path_buffer(path)
-        @test path_c === path
-        @test (batch_shape, batch, dimension, len) == ((12,), 12, 2, 5)
-        original = copy(path)
-        coefficients = sig(path, 3)
-        @test size(coefficients) == (sig_length(2, 3), 12)
-        @test SigLib._signature_like_buffer(coefficients, T, sig_length(2, 3), "signature")[1] === coefficients
-        @test SigLib._format_signature_output(coefficients, (12,)) === coefficients
-        @test path == original
-        for i in 1:12
-            @test coefficients[:, i] ≈ sig(path[:, :, i], 3)
-        end
-        multi = reshape(path, 2, 5, 3, 4)
-        multi_c = SigLib._path_buffer(multi)[1]
-        @test pointer(multi_c) == pointer(multi)
-        result = SigLib._format_signature_output(coefficients, (3, 4))
-        @test size(result) == (sig_length(2, 3), 3, 4)
-        @test pointer(result) == pointer(coefficients)
-        corrections = zeros(T, 4, 4, 12)
-        @test SigLib._correction_buffer(corrections, path_c, (12,), 12, 2, 5, 3, false).data === corrections
     end
 end

@@ -111,7 +111,7 @@ function rrule(
     if method != LogSigMethod.DirectBCH
         sig_value, sig_pullback = rrule(
             SigLib.sig, path, degree;
-            options..., scalar_term=method == LogSigMethod.Expanded && scalar_term, correction,
+            options..., scalar_term=method != LogSigMethod.Expanded || scalar_term, correction,
         )
         y, convert_pullback = rrule(
             SigLib.sig_to_log_sig, sig_value, size(path, 1), degree;

@@ -161,3 +161,30 @@ end
     end
     @test all(fetch, tasks)
 end
+
+@testset "in-place logs reuse dense and contiguous CPU storage" begin
+    function allocated_log_call(out, path, degree, scratch, method)
+        log_sig!(out, path, degree, scratch; method)
+        return @allocated log_sig!(out, path, degree, scratch; method)
+    end
+    for T in (Float32, Float64), method in instances(LogSigMethod.T)
+        for shape in ((3, 32), (3, 32, 4), (3, 32, 2, 2))
+            path = reshape(T.(sin.(1:prod(shape))), shape)
+            storage = cat(path, path; dims=length(shape) + 1)
+            contiguous = selectdim(storage, ndims(storage), 2)
+            expected = log_sig(path, 5; method)
+            out = similar(expected)
+            scratch = method == LogSigMethod.DirectBCH ? nothing : similar(sig(path, 5))
+            for input in (path, contiguous)
+                @test log_sig!(out, input, 5, scratch; method) === out
+                @test out ≈ expected
+                # The caller-owned API guarantees zero allocations for dense rank-3 paths.
+                # Other shapes and views can allocate small buffer/alias wrappers.
+                if input === path && ndims(path) == 3
+                    allocated_log_call(out, input, 5, scratch, method)
+                    @test allocated_log_call(out, input, 5, scratch, method) == 0
+                end
+            end
+        end
+    end
+end

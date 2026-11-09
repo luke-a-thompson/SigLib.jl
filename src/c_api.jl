@@ -4,7 +4,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:signature_, suffix))
     @eval @inline function _signature_c!(
         out::Matrix{$T},
-        path::Array{$T,3},
+        path::StridedArray{$T},
         batch_size::Integer,
         dimension::Integer,
         len::Integer,
@@ -44,7 +44,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:transform_path_, suffix))
     @eval function _transform_path_c!(
         out::Array{$T,3},
-        path::Array{$T,3},
+        path::StridedArray{$T},
         batch_size::Integer,
         dimension::Integer,
         len::Integer,
@@ -72,7 +72,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:transform_path_backprop_, suffix))
     @eval function _transform_path_backprop_c!(
         out::Array{$T,3},
-        derivs::Array{$T,3},
+        derivs::StridedArray{$T,3},
         batch_size::Integer,
         dimension::Integer,
         len::Integer,
@@ -100,7 +100,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:sig_to_log_sig_, suffix))
     @eval function _sig_to_log_sig_c!(
         out::Matrix{$T},
-        sig_value::Matrix{$T},
+        sig_value::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         degree::Integer,
@@ -129,8 +129,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:sig_to_log_sig_backprop_, suffix))
     @eval function _sig_to_log_sig_backprop_c!(
         out::Matrix{$T},
-        sig_value::Matrix{$T},
-        log_sig_derivs::Matrix{$T},
+        sig_value::StridedMatrix{$T},
+        log_sig_derivs::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         degree::Integer,
@@ -159,7 +159,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:logsig_to_sig_, suffix))
     @eval function _logsig_to_sig_c!(
         out::Matrix{$T},
-        log_sig_value::Matrix{$T},
+        log_sig_value::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         degree::Integer,
@@ -188,8 +188,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:logsig_to_sig_backprop_, suffix))
     @eval function _logsig_to_sig_backprop_c!(
         out::Matrix{$T},
-        log_sig_value::Matrix{$T},
-        sig_derivs::Matrix{$T},
+        log_sig_value::StridedMatrix{$T},
+        sig_derivs::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         degree::Integer,
@@ -218,7 +218,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:log_sig_from_path_, suffix))
     @eval function _log_sig_from_path_c!(
         out::Matrix{$T},
-        path::Array{$T,3},
+        path::StridedArray{$T},
         batch_size::Integer,
         len::Integer,
         dimension::Integer,
@@ -245,8 +245,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:log_sig_from_path_backprop_, suffix))
     @eval function _log_sig_from_path_backprop_c!(
         out::Array{$T,3},
-        log_sig_derivs::Matrix{$T},
-        path::Array{$T,3},
+        log_sig_derivs::StridedMatrix{$T},
+        path::StridedArray{$T},
         batch_size::Integer,
         len::Integer,
         dimension::Integer,
@@ -273,8 +273,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:log_sig_combine_, suffix))
     @eval function _log_sig_combine_c!(
         out::Matrix{$T},
-        log_sig1::Matrix{$T},
-        log_sig2::Matrix{$T},
+        log_sig1::StridedMatrix{$T},
+        log_sig2::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         degree::Integer,
@@ -300,9 +300,9 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     @eval function _log_sig_combine_backprop_c!(
         out1::Matrix{$T},
         out2::Matrix{$T},
-        derivs::Matrix{$T},
-        log_sig1::Matrix{$T},
-        log_sig2::Matrix{$T},
+        derivs::StridedMatrix{$T},
+        log_sig1::StridedMatrix{$T},
+        log_sig2::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         degree::Integer,
@@ -327,8 +327,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:log_sig_join_, suffix))
     @eval function _log_sig_join_c!(
         out::Matrix{$T},
-        log_sig_value::Matrix{$T},
-        displacement::Matrix{$T},
+        log_sig_value::StridedMatrix{$T},
+        displacement::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         degree::Integer,
@@ -354,9 +354,9 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     @eval function _log_sig_join_backprop_c!(
         out_log_sig::Matrix{$T},
         out_displacement::Matrix{$T},
-        derivs::Matrix{$T},
-        log_sig_value::Matrix{$T},
-        displacement::Matrix{$T},
+        derivs::StridedMatrix{$T},
+        log_sig_value::StridedMatrix{$T},
+        displacement::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         degree::Integer,
@@ -381,7 +381,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:branched_sig_, suffix))
     @eval @inline function _branched_sig_c!(
         out::Matrix{$T},
-        path::Array{$T,3},
+        path::StridedArray{$T},
         batch_size::Integer,
         dimension::Integer,
         len::Integer,
@@ -421,8 +421,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:branched_sig_combine_, suffix))
     @eval function _branched_sig_combine_c!(
         out::Matrix{$T},
-        bsig1::Matrix{$T},
-        bsig2::Matrix{$T},
+        bsig1::StridedMatrix{$T},
+        bsig2::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         max_nodes::Integer,
@@ -452,7 +452,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:branched_sig_to_log_sig_, suffix))
     @eval function _branched_sig_to_log_sig_c!(
         out::Matrix{$T},
-        bsig::Matrix{$T},
+        bsig::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         max_nodes::Integer,
@@ -483,9 +483,9 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:sig_backprop_, suffix))
     @eval function _sig_backprop_c!(
         out::Array{$T,3},
-        path::Array{$T,3},
-        sig_derivs::Matrix{$T},
-        sig_value::Matrix{$T},
+        path::StridedArray{$T},
+        sig_derivs::StridedMatrix{$T},
+        sig_value::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         len::Integer,
@@ -524,9 +524,9 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:branched_sig_backprop_, suffix))
     @eval function _branched_sig_backprop_c!(
         out::Array{$T,3},
-        path::Array{$T,3},
-        bsig_derivs::Matrix{$T},
-        bsig_value::Matrix{$T},
+        path::StridedArray{$T},
+        bsig_derivs::StridedMatrix{$T},
+        bsig_value::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         len::Integer,
@@ -566,8 +566,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     symbol = QuoteNode(Symbol(:branched_sig_to_log_sig_backprop_, suffix))
     @eval function _branched_sig_to_log_sig_backprop_c!(
         out::Matrix{$T},
-        bsig::Matrix{$T},
-        derivs::Matrix{$T},
+        bsig::StridedMatrix{$T},
+        derivs::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         max_nodes::Integer,
@@ -599,9 +599,9 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
     @eval function _branched_sig_combine_backprop_c!(
         out1::Matrix{$T},
         out2::Matrix{$T},
-        bsig1::Matrix{$T},
-        bsig2::Matrix{$T},
-        derivs::Matrix{$T},
+        bsig1::StridedMatrix{$T},
+        bsig2::StridedMatrix{$T},
+        derivs::StridedMatrix{$T},
         batch_size::Integer,
         dimension::Integer,
         max_nodes::Integer,
@@ -630,7 +630,7 @@ end
 for (T, suffix) in ((Float32, :f), (Float64, :d))
     forward = QuoteNode(Symbol(:branched_log_sig_from_path_, suffix))
     backward = QuoteNode(Symbol(:branched_log_sig_from_path_backprop_, suffix))
-    @eval function _branched_log_sig_from_path_c!(out::Matrix{$T}, path::Array{$T,3}, batch_size, len, dimension, degree, n_jobs)
+    @eval function _branched_log_sig_from_path_c!(out::Matrix{$T}, path::StridedArray{$T}, batch_size, len, dimension, degree, n_jobs)
         status = ccall(_cpsig_symbol($forward), Cint,
             (Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, UInt64, Cint),
             path, out, _as_uint64(batch_size, "batch_size"), _as_uint64(len, "length"),
@@ -638,7 +638,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         check_status(status, $forward)
         return out
     end
-    @eval function _branched_log_sig_from_path_backprop_c!(out::Array{$T,3}, derivs::Matrix{$T}, path::Array{$T,3}, batch_size, len, dimension, degree, n_jobs)
+    @eval function _branched_log_sig_from_path_backprop_c!(out::Array{$T,3}, derivs::StridedMatrix{$T}, path::StridedArray{$T}, batch_size, len, dimension, degree, n_jobs)
         status = ccall(_cpsig_symbol($backward), Cint,
             (Ptr{$T}, Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, UInt64, Cint),
             derivs, out, path, _as_uint64(batch_size, "batch_size"), _as_uint64(len, "length"),

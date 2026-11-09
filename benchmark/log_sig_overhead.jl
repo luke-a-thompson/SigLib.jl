@@ -31,10 +31,10 @@ for T in (Float32, Float64)
         end
         rc = ccall(signature, Cint,
             (Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, UInt64, Bool, Bool, $T, Bool, Bool, Cint, Ptr{$T}, UInt64, UInt64, UInt64),
-            packed, sig_buffer, batch, dim, len, degree, false, false, $T(1), true, false, 1, C_NULL, 0, 0, 0)
+            packed, sig_buffer, batch, dim, len, degree, false, false, $T(1), true, true, 1, C_NULL, 0, 0, 0)
         rc == 0 || error("signature failed: $rc")
         return ccall(convert, Cint, (Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, Bool, Bool, Cint, Bool, Cint),
-            sig_buffer, out, batch, dim, degree, false, false, Cint(method), false, 1)
+            sig_buffer, out, batch, dim, degree, false, false, Cint(method), true, 1)
     end
 end
 
@@ -45,7 +45,7 @@ function compare(::Type{T}, batch, len, dim, degree, method::LogSigMethod.T; sin
     packed = reshape(T.(data), dim, len, batch)
     public_path = single ? packed[:, :, 1] : packed
     out = Matrix{T}(undef, log_sig_length(dim, degree), batch)
-    sig_buffer = Matrix{T}(undef, sig_length(dim, degree), batch)
+    sig_buffer = Matrix{T}(undef, sig_length(dim, degree; scalar_term=true), batch)
     suffix = T == Float32 ? "f" : "d"
     direct = SigLib._cpsig_symbol(Symbol("log_sig_from_path_", suffix))
     signature = SigLib._cpsig_symbol(Symbol("signature_", suffix))

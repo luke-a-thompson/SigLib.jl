@@ -36,8 +36,8 @@ double repeat(void* direct_ptr, void* signature_ptr, void* convert_ptr,
             rc = direct(path, out, batch, length, dim, degree, 1);
         } else {
             rc = signature(path, sig, batch, dim, length, degree, false, false, T(1),
-                           true, false, 1, nullptr, 0, 0, 0);
-            if (!rc) rc = convert(sig, out, batch, dim, degree, false, false, method, false, 1);
+                           true, true, 1, nullptr, 0, 0, 0);
+            if (!rc) rc = convert(sig, out, batch, dim, degree, false, false, method, true, 1);
         }
         if (rc) return -rc;
     }
@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
     int method = std::atoi(argv[8]);
     uint64_t iterations = std::strtoull(argv[9], nullptr, 10);
     if (set_cache(argv[2]) || prepare(dim, degree, method, false)) return 2;
-    std::vector<double> data(batch * length * dim), out(batch * log_length(dim, degree)), sig(batch * (sig_length(dim, degree) - 1));
+    std::vector<double> data(batch * length * dim), out(batch * log_length(dim, degree)), sig(batch * sig_length(dim, degree));
     fill_path(data.data(), data.size(), dim == 2 && length == 129 ? 0.1 : 1.0);
     std::vector<float> data_f(data.begin(), data.end()), out_f(out.size()), sig_f(sig.size());
     auto direct = dlsym(lib, is_float ? "log_sig_from_path_f" : "log_sig_from_path_d");

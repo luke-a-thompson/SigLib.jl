@@ -37,10 +37,10 @@ for T in (Float32, Float64)
         else
             rc = ccall(signature, Cint,
                 (CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, UInt64, Bool, Bool, $T, Bool, Bool, CuPtr{$T}, UInt64, UInt64, UInt64),
-                packed, sig_buffer, batch, dim, len, degree, false, false, $T(1), true, false, CuPtr{$T}(0), 0, 0, 0)
+                packed, sig_buffer, batch, dim, len, degree, false, false, $T(1), true, true, CuPtr{$T}(0), 0, 0, 0)
             rc == 0 || error("native signature failed: $rc")
             rc = ccall(convert, Cint, (CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, Cint, Bool),
-                sig_buffer, out, batch, dim, degree, Cint(method), false)
+                sig_buffer, out, batch, dim, degree, Cint(method), true)
         end
         rc == 0 || error("native log signature failed: $rc")
         CUDA.device_synchronize()
@@ -53,7 +53,7 @@ function compare(::Type{T}, batch, len, dim, degree, method::LogSigMethod.T; sam
     path = CuArray(host)
     packed = path
     out = CuArray{T}(undef, log_sig_length(dim, degree), batch)
-    sig_buffer = CuArray{T}(undef, method == LogSigMethod.DirectBCH ? 0 : sig_length(dim, degree), batch)
+    sig_buffer = CuArray{T}(undef, method == LogSigMethod.DirectBCH ? 0 : sig_length(dim, degree; scalar_term=true), batch)
     prepare_log_sig(dim, degree, method; device=:cuda)
     library = EXT._library()
     suffix = T == Float32 ? "f" : "d"
@@ -72,9 +72,9 @@ function compare(::Type{T}, batch, len, dim, degree, method::LogSigMethod.T; sam
             SigLib._prepare_log_sig_for(packed, dim, degree, LogSigMethod.DirectBCH)
             SigLib._log_sig_from_path_c!(out, packed, batch, len, dim, degree, 1)
         else
-            SigLib._signature_c!(sig_buffer, packed, batch, dim, len, degree, false, false, true, false, 1, one(T))
+            SigLib._signature_c!(sig_buffer, packed, batch, dim, len, degree, false, false, true, true, 1, one(T))
             SigLib._prepare_log_sig_if_needed(packed, dim, degree, method)
-            SigLib._sig_to_log_sig_c!(out, sig_buffer, batch, dim, degree, false, false, method, false, 1)
+            SigLib._sig_to_log_sig_c!(out, sig_buffer, batch, dim, degree, false, false, method, true, 1)
         end
         CUDA.device_synchronize()
         out
@@ -87,8 +87,10 @@ function compare(::Type{T}, batch, len, dim, degree, method::LogSigMethod.T; sam
     @assert isapprox(Array(raw_call()), expected)
     @assert isapprox(Array(public_call()), log_sig(host, degree; method); rtol=T == Float32 ? 2e-4 : 2e-10, atol=T == Float32 ? 2e-5 : 2e-11)
     result_buffer = similar(out)
+    inplace_scratch = method == LogSigMethod.DirectBCH ? nothing :
+        CuArray{T}(undef, sig_length(dim, degree), batch)
     inplace_call = () -> begin
-        result = log_sig!(result_buffer, path, degree, sig_buffer; method)
+        result = log_sig!(result_buffer, path, degree, inplace_scratch; method)
         CUDA.device_synchronize()
         result
     end

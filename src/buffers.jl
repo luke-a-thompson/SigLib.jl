@@ -92,6 +92,18 @@ end
 _backend(::AbstractArray) = :cpu
 _with_array(f, ::AbstractArray) = f()
 _materialize(x::AbstractArray, ::Type{T}) where {T} = x isa Array{T} ? x : Array{T}(x)
+
+# The native ABI accepts packed storage, including views into a larger array.
+# Singleton dimensions can have arbitrary strides without introducing gaps.
+function _materialize(x::StridedArray{T}, ::Type{T}) where {T}
+    expected_stride = 1
+    for d in 1:ndims(x)
+        size(x, d) > 1 && stride(x, d) != expected_stride && return Array(x)
+        expected_stride *= size(x, d)
+    end
+    return x
+end
+
 _reshape_buffer(x, dims::Tuple) = size(x) == dims ? x : reshape(x, dims)
 
 function _allocate(like::AbstractArray, dims::Integer...; zero::Bool=false)
@@ -122,8 +134,8 @@ function _path_buffer(path::AbstractArray{T,N}, function_name::Symbol=:sig) wher
         len >= 1 || throw(ArgumentError("path length must be positive"))
 
         # Julia's channel-first, batch-last storage matches the row-major C ABI.
-        # Dense inputs share storage; only views and precision conversions copy.
-        return _reshape_buffer(_materialize(path, S), (dimension, len, batch_size)),
+        # The ABI receives dimensions separately, so input reshapes are unnecessary.
+        return _materialize(path, S),
             batch_shape, batch_size, dimension, len
     end
 end

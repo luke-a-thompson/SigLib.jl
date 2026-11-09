@@ -30,7 +30,7 @@ double repeat(void* direct_ptr, void* signature_ptr, void* convert_ptr, void* pr
     for (uint64_t i = 0; i < iterations; ++i) {
         if (method != 3) {
             if (matched_checks && (rc = synchronize())) return -(100000 + rc);
-            rc = signature(path, sig, batch, dim, length, degree, false, false, T(1), true, false, nullptr, 0, 0, 0);
+            rc = signature(path, sig, batch, dim, length, degree, false, false, T(1), true, true, nullptr, 0, 0, 0);
             if (rc) return -rc;
             if (matched_checks && (rc = synchronize())) return -(100000 + rc);
         }
@@ -41,7 +41,7 @@ double repeat(void* direct_ptr, void* signature_ptr, void* convert_ptr, void* pr
             if ((rc = synchronize())) return -(100000 + rc);
         }
         rc = method == 3 ? direct(path, out, batch, length, dim, degree)
-                         : convert(sig, out, batch, dim, degree, method, false);
+                         : convert(sig, out, batch, dim, degree, method, true);
         if (rc) return -rc;
         if (matched_checks && (rc = synchronize())) return -(100000 + rc);
         // Include completion of GPU work in every call, including the final one.
