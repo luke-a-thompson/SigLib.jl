@@ -274,7 +274,7 @@ function _log_sig_from_buffers!(out, sig_c, path_c, batch_size, dimension, len, 
                     transformed_dimension, degree, n_jobs)
             else
                 _signature_c!(sig_c, path_c, batch_size, dimension, len, degree,
-                    time_aug, lead_lag, true, scalar_term, n_jobs, end_time,
+                    time_aug, lead_lag, SigMethod.Auto, 0, scalar_term, n_jobs, end_time,
                     _CorrectionBuffer(correction_data, correction_length, correction_batch_stride, correction_segment_stride))
                 _sig_to_log_sig_c!(out, sig_c, batch_size, dimension, degree,
                     time_aug, lead_lag, method, scalar_term, n_jobs)

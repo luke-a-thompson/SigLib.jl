@@ -11,7 +11,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         degree::Integer,
         time_aug::Bool,
         lead_lag::Bool,
-        horner::Bool,
+        method::SigMethod.T,
+        ps_split::Integer,
         scalar_term::Bool,
         n_jobs::Integer,
         end_time::Real,
@@ -23,17 +24,18 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
             (
                 Ptr{$T}, Ptr{$T},
                 UInt64, UInt64, UInt64, UInt64,
-                Bool, Bool, $T, Bool, Bool, Cint,
-                Ptr{$T}, UInt64, UInt64, UInt64,
+                Bool, Bool, $T, Bool, Cint,
+                Ptr{$T}, UInt64, UInt64, UInt64, Cint, UInt64,
             ),
             path, out,
             _as_uint64(batch_size, "batch_size"),
             _as_uint64(dimension, "dimension"),
             _as_uint64(len, "length"),
             _as_uint64(degree, "degree"),
-            time_aug, lead_lag, $T(end_time), horner, scalar_term, _as_cint_n_jobs(n_jobs),
+            time_aug, lead_lag, $T(end_time), scalar_term, _as_cint_n_jobs(n_jobs),
             correction.data === nothing ? Ptr{$T}(C_NULL) : correction.data,
             correction.length, correction.batch_stride, correction.segment_stride,
+            Cint(method), UInt64(ps_split),
         )
         check_status(status, $symbol)
         return out
@@ -492,6 +494,8 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
         degree::Integer,
         time_aug::Bool,
         lead_lag::Bool,
+        method::SigMethod.T,
+        ps_split::Integer,
         scalar_term::Bool,
         n_jobs::Integer,
         end_time::Real,
@@ -504,7 +508,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
                 Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{$T},
                 UInt64, UInt64, UInt64, UInt64,
                 Bool, Bool, $T, Bool, Cint,
-                Ptr{$T}, UInt64, UInt64, UInt64,
+                Ptr{$T}, UInt64, UInt64, UInt64, Cint, UInt64,
             ),
             path, out, sig_derivs, sig_value,
             _as_uint64(batch_size, "batch_size"),
@@ -514,6 +518,7 @@ for (T, suffix) in ((Float32, :f), (Float64, :d))
             time_aug, lead_lag, $T(end_time), scalar_term, _as_cint_n_jobs(n_jobs),
             correction.data === nothing ? Ptr{$T}(C_NULL) : correction.data,
             correction.length, correction.batch_stride, correction.segment_stride,
+            Cint(method), UInt64(ps_split),
         )
         check_status(status, $symbol)
         return out

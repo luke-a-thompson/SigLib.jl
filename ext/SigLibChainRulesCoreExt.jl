@@ -9,9 +9,9 @@ function rrule(
     ::typeof(SigLib.sig),
     path::AbstractArray{T,N},
     degree::Integer;
-    horner::Bool=true, kwargs...,
+    kwargs...,
 ) where {T<:Union{Float32,Float64},N}
-    y = SigLib.sig(path, degree; horner, kwargs...)
+    y = SigLib.sig(path, degree; kwargs...)
     project_path = ProjectTo(path)
 
     function sig_pullback(ybar)

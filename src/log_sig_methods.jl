@@ -1,4 +1,28 @@
 """
+    SigMethod
+
+Algorithms for tensor signatures and their gradients. Pass a value as
+`method=SigMethod.PrefixSuffix`.
+
+- `Horner`: Horner's scheme (native value 0).
+- `PrefixSuffix`: prefix-suffix factorisation (1).
+- `Auto`: select an algorithm for each pass (2, the default).
+
+Values have type `SigMethod.T`. `ps_split` optionally fixes the maximum prefix
+degree of `PrefixSuffix`, from 1 to `degree`.
+"""
+module SigMethod
+    @enum T::Int32 Horner=0 PrefixSuffix=1 Auto=2
+end
+
+function _ps_split(method::SigMethod.T, ps_split::Union{Nothing,Integer}, degree::Integer)
+    ps_split === nothing && return UInt64(0)
+    method == SigMethod.PrefixSuffix || throw(ArgumentError("ps_split requires method=SigMethod.PrefixSuffix"))
+    1 <= ps_split <= degree || throw(ArgumentError("ps_split must be between 1 and degree"))
+    return UInt64(ps_split)
+end
+
+"""
     LogSigMethod
 
 Methods for ordinary log signatures. Pass a value as `method=LogSigMethod.LyndonBasis`.

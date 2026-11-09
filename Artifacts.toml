@@ -1,11 +1,11 @@
-# pySigLib main at e075fffd77c3605a032052dd59edec0c0497c339; Highway runtime SIMD.
+# pySigLib main at 5ef038800a38116df609a0957d07ede5e1ec832f; Highway runtime SIMD.
 [[pysiglib_cpu]]
 arch = "x86_64"
-git-tree-sha1 = "df7f91f5011aace5c1dc7d48f20d22c450ce4845"
+git-tree-sha1 = "acb396de4c2a2e060b63625055175b875b122214"
 lazy = true
 libc = "glibc"
 os = "linux"
 
     [[pysiglib_cpu.download]]
-    sha256 = "e2a543505ce407a28be5277d2d8e82dcf1b55b8850d13f919bd34cdfe139cf34"
-    url = "https://raw.githubusercontent.com/luke-a-thompson/SigLib.jl/main/products/cpsig.e075fff.x86_64-linux-gnu.tar.gz"
+    sha256 = "0ee210d4ba11efdeeae0ea0b680cc05ee0e8d101d36c2e1dd0271284086784c2"
+    url = "https://raw.githubusercontent.com/luke-a-thompson/SigLib.jl/main/products/cpsig.5ef0388.x86_64-linux-gnu.tar.gz"

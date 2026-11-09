@@ -24,13 +24,15 @@ export sig, sig!, sig_length, signature, signature!, signature_length
 export clear_log_sig_cache, set_cache_dir, log_sig, log_sig_combine, log_sig_join
 export log_sig_length, logsig_to_sig, prepare_log_sig, sig_to_log_sig
 export log_sig!
-export LogSigMethod, BranchedLogSigMethod
+export SigMethod, LogSigMethod, BranchedLogSigMethod
 export branched_sig, branched_sig!, branched_sig_combine, branched_sig_length, branched_sig_to_log_sig
 export branched_log_sig, branched_log_sig!, branched_log_sig_length, prepare_branched_sig, prepare_branched_log_sig
 export branched_signature, branched_signature!, branched_signature_length
 export SigLibError, CPSigError
 export words, words_of_length, lyndon_words, lyndon_words_of_length, is_lyndon
-export word_to_idx, idx_to_word, lyndon_bracket, lyndon_brackets, log_sig_basis
+export word_to_idx, idx_to_word, lyndon_word_to_idx, idx_to_lyndon_word
+export lyndon_bracket, lyndon_brackets, log_sig_basis
 export trees, trees_of_order, rooted_trees, tree_to_idx, idx_to_tree, branched_log_sig_basis
+export forests, forest_to_idx, idx_to_forest, lyndon_forests, lyndon_forest_to_idx, idx_to_lyndon_forest
 
 end

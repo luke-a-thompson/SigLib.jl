@@ -30,8 +30,8 @@ for T in (Float32, Float64)
             return ccall(direct, Cint, (Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, UInt64, Cint), packed, out, batch, len, dim, degree, 1)
         end
         rc = ccall(signature, Cint,
-            (Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, UInt64, Bool, Bool, $T, Bool, Bool, Cint, Ptr{$T}, UInt64, UInt64, UInt64),
-            packed, sig_buffer, batch, dim, len, degree, false, false, $T(1), true, false, 1, C_NULL, 0, 0, 0)
+            (Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, UInt64, Bool, Bool, $T, Bool, Cint, Ptr{$T}, UInt64, UInt64, UInt64, Cint, UInt64),
+            packed, sig_buffer, batch, dim, len, degree, false, false, $T(1), false, 1, C_NULL, 0, 0, 0, 2, 0)
         rc == 0 || error("signature failed: $rc")
         return ccall(convert, Cint, (Ptr{$T}, Ptr{$T}, UInt64, UInt64, UInt64, Bool, Bool, Cint, Bool, Cint),
             sig_buffer, out, batch, dim, degree, false, false, Cint(method), false, 1)

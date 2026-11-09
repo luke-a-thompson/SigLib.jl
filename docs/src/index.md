@@ -6,7 +6,7 @@ The implemented API covers standard and branched signatures, log signatures, con
 
 ```julia
 sig_length(dimension, degree; scalar_term=false)
-sig(path, degree; scalar_term=false, correction=nothing, n_jobs=1)
+sig(path, degree; scalar_term=false, correction=nothing, n_jobs=1, method=SigMethod.Auto, ps_split=nothing)
 sig!(out, path, degree; kwargs...)
 log_sig_length(dimension, degree; time_aug=false, lead_lag=false)
 prepare_log_sig(dimension, degree, method; time_aug=false, lead_lag=false)
@@ -62,6 +62,8 @@ The `method` argument accepts scoped enum values, with distinct types for ordina
 
 For ordinary log signatures, `LogSigMethod.Expanded` returns tensor logarithms, `LyndonWords` extracts Lyndon-word coordinates (the default), `LyndonBasis` returns Lyndon-basis coordinates, and `DirectBCH` computes Lyndon-basis coordinates directly through BCH. Combine/join expect `LyndonBasis` or `DirectBCH` coordinates. All except `Expanded` use compressed outputs and ignore `scalar_term`. Signature/log-signature conversions accept `Expanded`, `LyndonWords`, or `LyndonBasis`; `DirectBCH` requires a path.
 
+`sig` takes a separate `SigMethod` algorithm: `Horner` (native value 0), `PrefixSuffix` (1), or `Auto` (2, the default), which selects an algorithm independently for the forward and backward passes. `ps_split` fixes the maximum prefix degree of `PrefixSuffix`, from 1 to `degree`; `nothing` selects it automatically. ChainRules uses the same method for the gradient. Log signatures computed from a signature use `Auto`.
+
 `sig!` and `branched_sig!` write into caller-owned output arrays. `log_sig!` and `branched_log_sig!` also take a caller-owned signature scratch array, except for `DirectBCH`, which needs only the output. Each accepts the same keywords as its allocating counterpart and returns the original output array. Scratch has the shape of `sig(path, degree; ...)` or `branched_sig(path, degree; ...)` with matching transforms and scalar-term options; ordinary logs include the scalar term in scratch only for `Expanded` with `scalar_term=true`. Outputs and scratch must be dense arrays of the correct shape, eltype, backend, and CUDA context; they must not alias each other, the path, or corrections. Input views are accepted and may be materialized. Native caches prepare automatically, including after clearing.
 
 ```julia
@@ -90,35 +92,55 @@ In-memory caches prepare automatically. Use `set_cache_dir(directory)` before re
 
 ## Words, trees, and log bases
 
-The enumeration utilities run in Julia and need no Python installation or native cache preparation. They follow [pySigLib's word utilities](https://github.com/daniil-shmelev/pySigLib/blob/main/pysiglib/words.py) and [tree utilities](https://github.com/daniil-shmelev/pySigLib/blob/main/pysiglib/trees.py). SigLib additionally exposes the standard Lyndon bracketings and the compressed MKW basis labels constructed internally by pySigLib.
+The enumeration utilities run in Julia and need no Python installation or native cache preparation. They follow [pySigLib's word utilities](https://github.com/daniil-shmelev/pySigLib/blob/main/pysiglib/words.py) and [tree and forest utilities](https://github.com/daniil-shmelev/pySigLib/blob/main/pysiglib/trees.py), covering its five coordinate families. SigLib additionally exposes individual rooted trees, the standard Lyndon bracketings, and per-method log-signature labels.
+
+| Enumeration | Index helpers | Coordinates |
+|---|---|---|
+| `words` | `word_to_idx`, `idx_to_word` | Signatures and expanded log signatures |
+| `lyndon_words` | `lyndon_word_to_idx`, `idx_to_lyndon_word` | Compressed log signatures (`LyndonWords`, `LyndonBasis`, `DirectBCH`) |
+| `trees` | `tree_to_idx`, `idx_to_tree` | Nonplanar BCK branched signatures and log signatures |
+| `forests` | `forest_to_idx`, `idx_to_forest` | Planar MKW branched signatures and expanded MKW logs |
+| `lyndon_forests` | `lyndon_forest_to_idx`, `idx_to_lyndon_forest` | Compressed MKW logs (`MkwWords`, `MkwBasis`, `DirectBCH`) |
 
 ```julia
-words(dimension, degree)                         # includes the empty word ()
-words_of_length(dimension, length)
-lyndon_words(dimension, degree)                  # no empty word
+words(dimension, degree; scalar_term=false)
+words_of_length(dimension, length; scalar_term=false)
+word_to_idx(word, dimension, degree; scalar_term=false)
+idx_to_word(index, dimension, degree; scalar_term=false)
+lyndon_words(dimension, degree)                  # never includes the empty word
 lyndon_words_of_length(dimension, length)
+lyndon_word_to_idx(word, dimension, degree)
+idx_to_lyndon_word(index, dimension, degree)
 is_lyndon(word)
 lyndon_bracket(word)
 lyndon_brackets(dimension, degree)
-word_to_idx(word, dimension; scalar_term=false)
-idx_to_word(index, dimension; scalar_term=false)
-trees(dimension, degree; planar=false)           # includes nothing for the scalar
-trees_of_order(dimension, order; planar=false)
+trees(dimension, degree; scalar_term=false)      # BCK trees
+trees_of_order(dimension, order; scalar_term=false)
+tree_to_idx(tree, dimension, degree; scalar_term=false)
+idx_to_tree(index, dimension, degree; scalar_term=false)
+forests(dimension, degree; scalar_term=false)    # MKW ordered forests
+forest_to_idx(forest, dimension, degree; scalar_term=false)
+idx_to_forest(index, dimension, degree; scalar_term=false)
+lyndon_forests(dimension, degree)                # never includes the empty forest
+lyndon_forest_to_idx(forest, dimension, degree)
+idx_to_lyndon_forest(index, dimension, degree)
 rooted_trees(dimension, degree; planar=false)    # individual trees, excludes empty
-tree_to_idx(tree, dimension, degree; planar=false, scalar_term=false)
-idx_to_tree(index, dimension, degree; planar=false, scalar_term=false)
 log_sig_basis(dimension, degree; method=LogSigMethod.LyndonWords, scalar_term=false)
 branched_log_sig_basis(dimension, degree; planar=false, method=planar ? BranchedLogSigMethod.MkwWords : BranchedLogSigMethod.Expanded, scalar_term=false)
 ```
 
-**Channel labels are zero-based; coefficient indices are one-based Julia indices.** Thus `(0,)` labels the first channel, and `word_to_idx((0,), 2)` returns `1`. For time augmentation or lead-lag, pass the effective dimension used by the numerical output. Utilities return fresh vectors; changing a returned vector does not change later enumerations.
+**Channel labels are zero-based; coefficient indices are one-based Julia indices.** Thus `(0,)` labels the first channel, and `word_to_idx((0,), 2, 3)` returns `1`. Each index helper is the inverse of its enumeration under the same options: `words(d, n; scalar_term=s)[i] == idx_to_word(i, d, n; scalar_term=s)`, and likewise for the other families. `degree` is the inclusive maximum word length or total node count, and increasing it appends labels without changing existing indices. Full enumerations default to `scalar_term=false`; `scalar_term=true` puts the empty element first: `()` for words and forests, `nothing` for trees. Lyndon families never include it. Full and compressed indices differ: `word_to_idx((0, 1), 2, 3) == 4`, but `lyndon_word_to_idx((0, 1), 2, 3) == 3`. Index helpers reject labels outside the requested family or degree and indices outside the enumeration. For time augmentation or lead-lag, pass the effective dimension used by the numerical output. Utilities return fresh vectors; changing a returned vector does not change later enumerations.
 
-Trees use nested tuples: a leaf is `(label,)`, and an internal node is `(child1, child2, ..., root_label)`. Nonplanar children appear in increasing native tree-ID order; use that order when passing a tree to `tree_to_idx`. With `planar=true`, `trees` enumerates ordered forests `(tree1, tree2, ...)`, matching MKW signature coordinates. `rooted_trees(...; planar=true)` enumerates individual planar rooted trees. The scalar label is `nothing` in both cases, and `tree_to_idx(nothing, ...; scalar_term=true)` returns `1`.
+Trees use nested tuples: a leaf is `(label,)`, and an internal node is `(child1, child2, ..., root_label)`. Nonplanar children appear in increasing native tree-ID order; use that order when passing a tree to `tree_to_idx`. Tree IDs follow node count, child-ID sequence, and then root label; comparing nested tuples does not give this order. A forest is a tuple `(tree1, tree2, ...)` of planar trees, ordered by total node count and then lexicographically by tree ID. A one-tree forest is the singleton `(tree,)`, not the bare tree. In `lyndon_forests`, each planar tree is a letter weighted by its node count, and every singleton forest is Lyndon. `rooted_trees(...; planar=true)` enumerates the individual planar trees, which are these letters.
+
+This follows pySigLib's redesigned combinatorics API. `trees(...; planar=true)` and the planar index calls are replaced by `forests`, `forest_to_idx`, and `idx_to_forest`. `words` and `trees` no longer include the scalar unless `scalar_term=true`, and `word_to_idx`/`idx_to_word` now take `degree`.
 
 ```julia
 path = [0.0 0.5 1.0; 0.0 1.0 -0.25]
 bs = branched_sig(path, 3)
 bs[tree_to_idx(((1,), 0), 2, 3)] # root 0, child 1; tensor word (1, 0)
+mkw = branched_sig(path, 3; planar=true)
+mkw[forest_to_idx(((0,), (1,)), 2, 3)] # ordered forest of two leaves
 
 lyndon_words(2, 3)     # [(0,), (1,), (0, 1), (0, 0, 1), (0, 1, 1)]
 lyndon_bracket((0, 0, 1)) # (:bracket, 0, (:bracket, 0, 1))
@@ -128,7 +150,8 @@ collect(zip(labels, log_sig(path, 3; method=LogSigMethod.LyndonBasis)))
 # Expanded BCK logs are indexed by trees.
 collect(zip(branched_log_sig_basis(2, 3), branched_log_sig(path, 3)))
 
-# Compressed MKW logs require the 4.x artifact.
+# Compressed MKW logs are indexed by weighted Lyndon forests.
+collect(zip(lyndon_forests(2, 3), branched_log_sig(path, 3; planar=true)))
 mkw_labels = branched_log_sig_basis(2, 3; planar=true, method=BranchedLogSigMethod.MkwBasis)
 ```
 
@@ -181,9 +204,9 @@ Files ending in `_batch_last_results.csv` record the current layout. Other CSV f
 
 ## Native artifacts
 
-SigLib requires the pySigLib 4.x ABI. The root `Artifacts.toml` pins [GitHub commit `e075fff`](https://github.com/daniil-shmelev/pySigLib/tree/e075fffd77c3605a032052dd59edec0c0497c339), which includes Highway runtime SIMD dispatch. The 4.0.0 release wheel predates that implementation. The native archive is bundled under `products/`, includes dependency licenses and `pysiglib/BUILD_INFO.toml`, and needs no Python or compiler at runtime.
+SigLib requires the pySigLib 4.x ABI. The root `Artifacts.toml` pins [GitHub commit `5ef0388`](https://github.com/daniil-shmelev/pySigLib/tree/5ef038800a38116df609a0957d07ede5e1ec832f), which includes Highway runtime SIMD dispatch and prefix-suffix signatures. The 4.0.0 release wheel predates that implementation. The native archive is bundled under `products/`, includes dependency licenses and `pysiglib/BUILD_INFO.toml`, and needs no Python or compiler at runtime.
 
-The bundled build targets Linux x86-64, includes SSE2 and AVX2 kernels selected at runtime, and requires glibc 2.38+ and a C++ runtime providing `GLIBCXX_3.4.32`. It was built with GCC 13.3, `-DCMAKE_BUILD_TYPE=Release -DPYSIGLIB_AVX=ON -DPYSIGLIB_JAX_FFI=OFF`, and no `-march=native`. Upstream pins Highway and oneTBB; their commits are recorded in the archive. To rebuild, configure that checkout with those options, build target `cpsig`, and install to a staging directory before packaging its native libraries and licenses as a Julia artifact.
+The bundled build targets Linux x86-64, includes SSE2 and AVX2 kernels selected at runtime, and requires glibc 2.38+ and a C++ runtime providing `GLIBCXX_3.4.32`. It was built with GCC 13.3, `-DCMAKE_BUILD_TYPE=Release -DPYSIGLIB_AVX=ON -DPYSIGLIB_JAX_FFI=OFF`, and no `-march=native`. Upstream pins Highway, oneTBB, and OpenBLAS; OpenBLAS is linked statically with runtime CPU dispatch, and the versions are recorded in the archive. Building OpenBLAS requires Ninja. To rebuild, configure that checkout with those options, build target `cpsig`, and install to a staging directory before packaging its native libraries and licenses as a Julia artifact.
 
 When upstream publishes Julia release assets, import their manifest with `julia scripts/update_artifacts.jl v4.VERSION.PATCH`, then run `julia --project -e 'using Pkg; Pkg.test()'`. The updater checks artifact hashes, download checksums, and release URLs before replacing the file. CUDA calls load the lazy `pysiglib_cuda12` artifact on first use; its manifest entry must be supplied by an upstream release manifest or a local development manifest. CPU and CUDA artifacts must use matching upstream revisions.
 

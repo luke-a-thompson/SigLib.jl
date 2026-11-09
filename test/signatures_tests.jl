@@ -32,3 +32,16 @@
     @test sig(path64, 2; correction=Float64[]) ≈ sig(path64, 2)
     @test_throws ArgumentError sig(Array{Float64}(undef, 1, 0, 2), 2)
 end
+
+@testset "signature methods" begin
+    path = [0.0 0.3 -0.1 0.2 0.6; 0.0 -0.2 0.5 0.4 0.1]
+    expected = sig(path, 4; method=SigMethod.Horner)
+    @test sig(path, 4) ≈ expected
+    @test sig(path, 4; method=SigMethod.PrefixSuffix) ≈ expected
+    for split in 1:4
+        @test sig(path, 4; method=SigMethod.PrefixSuffix, ps_split=split) ≈ expected
+    end
+    @test_throws ArgumentError sig(path, 4; ps_split=2)
+    @test_throws ArgumentError sig(path, 4; method=SigMethod.PrefixSuffix, ps_split=0)
+    @test_throws ArgumentError sig(path, 4; method=SigMethod.PrefixSuffix, ps_split=5)
+end

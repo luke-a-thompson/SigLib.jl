@@ -1,5 +1,6 @@
 # pySigLib trees.py blob 4348cbfb90e09dd0bf37dc2b00747cb200510314.
-# Generated from trees(2, 3), with zero-based labels.
+# Generated from trees(2, 3), with zero-based labels. BCK_BASIS_2_3 equals
+# trees(2, 3; scalar_term=true); MKW_BASIS_2_3[2:end] equals forests(2, 3).
 const BCK_BASIS_2_3 = Any[
     nothing,
     (0,),

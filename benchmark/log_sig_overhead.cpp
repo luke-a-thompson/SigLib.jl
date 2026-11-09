@@ -21,7 +21,7 @@ double repeat(void* direct_ptr, void* signature_ptr, void* convert_ptr,
               int method, uint64_t iterations) {
     using Direct = int (*)(const T*, T*, uint64_t, uint64_t, uint64_t, uint64_t, int);
     using Signature = int (*)(const T*, T*, uint64_t, uint64_t, uint64_t, uint64_t,
-                             bool, bool, T, bool, bool, int, const T*, uint64_t, uint64_t, uint64_t);
+                             bool, bool, T, bool, int, const T*, uint64_t, uint64_t, uint64_t, int, uint64_t);
     using Convert = int (*)(const T*, T*, uint64_t, uint64_t, uint64_t, bool, bool, int, bool, int);
     auto direct = reinterpret_cast<Direct>(direct_ptr);
     auto signature = reinterpret_cast<Signature>(signature_ptr);
@@ -36,7 +36,7 @@ double repeat(void* direct_ptr, void* signature_ptr, void* convert_ptr,
             rc = direct(path, out, batch, length, dim, degree, 1);
         } else {
             rc = signature(path, sig, batch, dim, length, degree, false, false, T(1),
-                           true, false, 1, nullptr, 0, 0, 0);
+                           false, 1, nullptr, 0, 0, 0, 2, 0);
             if (!rc) rc = convert(sig, out, batch, dim, degree, false, false, method, false, 1);
         }
         if (rc) return -rc;

@@ -1,6 +1,7 @@
 """
     sig(path, degree; time_aug=false, lead_lag=false, end_time=1.0,
-        horner=true, scalar_term=false, correction=nothing, n_jobs=1)
+        scalar_term=false, correction=nothing, n_jobs=1, method=SigMethod.Auto,
+        ps_split=nothing)
 
 Compute the truncated signature of one path or a batch of paths.
 
@@ -19,6 +20,10 @@ varies fastest). Missing higher levels are zero; `nothing` or an empty array
 means no correction. The correction must use the path's eltype and backend.
 Time augmentation adds no correction to the time channel. Non-empty corrections
 cannot be combined with `lead_lag=true`. Path gradients treat corrections as constants.
+
+`method` selects the [`SigMethod`](@ref) algorithm for the forward pass and its
+gradient. `ps_split` fixes the maximum prefix degree of `SigMethod.PrefixSuffix`;
+`nothing` selects it automatically.
 """
 sig(path::AbstractArray, degree::Integer; kwargs...) = _sig(nothing, path, degree; kwargs...)
 
@@ -38,19 +43,21 @@ function _sig(
     time_aug::Bool=false,
     lead_lag::Bool=false,
     end_time::Real=1.0,
-    horner::Bool=true,
     scalar_term::Bool=false,
     correction=nothing,
     n_jobs::Integer=1,
+    method::SigMethod.T=SigMethod.Auto,
+    ps_split::Union{Nothing,Integer}=nothing,
 ) where {T<:Real,N}
     degree >= 0 || throw(ArgumentError("degree must be nonnegative"))
     _as_cint_n_jobs(n_jobs)
+    split = _ps_split(method, ps_split, degree)
     path_c, batch_shape, batch_size, dimension, len = _path_buffer(path)
     correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, degree, lead_lag)
     siglen = sig_length(dimension, degree; time_aug, lead_lag, scalar_term)
     out = _output_buffer(destination, path_c, siglen, batch_shape, batch_size, "out", (path, correction))
     isempty(out) || _signature_c!(out, path_c, batch_size, dimension, len, degree,
-        time_aug, lead_lag, horner, scalar_term, n_jobs, end_time, correction_c)
+        time_aug, lead_lag, method, split, scalar_term, n_jobs, end_time, correction_c)
     return destination === nothing ? _format_signature_output(out, batch_shape) : destination
 end
 
@@ -65,9 +72,12 @@ function _sig_backprop(
     scalar_term::Bool=false,
     correction=nothing,
     n_jobs::Integer=1,
+    method::SigMethod.T=SigMethod.Auto,
+    ps_split::Union{Nothing,Integer}=nothing,
 ) where {T<:Real,N}
     degree >= 0 || throw(ArgumentError("degree must be nonnegative"))
     _as_cint_n_jobs(n_jobs)
+    split = _ps_split(method, ps_split, degree)
     path_c, batch_shape, batch_size, dimension, len = _path_buffer(path)
     correction_c = _correction_buffer(correction, path_c, batch_shape, batch_size, dimension, len, degree, lead_lag)
     S = eltype(path_c)
@@ -82,7 +92,7 @@ function _sig_backprop(
     if batch_size != 0 && siglen != 0
         _sig_backprop_c!(
             out_c, path_c, sig_derivs_c, sig_c, batch_size, dimension, len, degree,
-            time_aug, lead_lag, scalar_term, n_jobs, end_time, correction_c,
+            time_aug, lead_lag, method, split, scalar_term, n_jobs, end_time, correction_c,
         )
     end
 

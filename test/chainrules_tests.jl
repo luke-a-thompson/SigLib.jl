@@ -41,6 +41,13 @@ end
         sig_scalar_tangents[2],
     )
 
+    for options in ((; method=SigMethod.Horner), (; method=SigMethod.PrefixSuffix),
+        (; method=SigMethod.PrefixSuffix, ps_split=1))
+        method_value, method_pullback = rrule(sig, path, 2; options...)
+        @test method_value ≈ sig_value
+        @test method_pullback(sig_bar)[2] ≈ sig_tangents[2]
+    end
+
     path32 = Float32[0.0 0.5 1.0; 0.0 1.0 -0.25]
     sig32_value, sig32_pullback = rrule(sig, path32, 2)
     sig32_tangents = sig32_pullback(ones(Float32, size(sig32_value)))

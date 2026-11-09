@@ -36,8 +36,8 @@ for T in (Float32, Float64)
             rc = ccall(direct, Cint, (CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, UInt64), packed, out, batch, len, dim, degree)
         else
             rc = ccall(signature, Cint,
-                (CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, UInt64, Bool, Bool, $T, Bool, Bool, CuPtr{$T}, UInt64, UInt64, UInt64),
-                packed, sig_buffer, batch, dim, len, degree, false, false, $T(1), true, false, CuPtr{$T}(0), 0, 0, 0)
+                (CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, UInt64, Bool, Bool, $T, Bool, CuPtr{$T}, UInt64, UInt64, UInt64, Cint, UInt64),
+                packed, sig_buffer, batch, dim, len, degree, false, false, $T(1), false, CuPtr{$T}(0), 0, 0, 0, Cint(2), 0)
             rc == 0 || error("native signature failed: $rc")
             rc = ccall(convert, Cint, (CuPtr{$T}, CuPtr{$T}, UInt64, UInt64, UInt64, Cint, Bool),
                 sig_buffer, out, batch, dim, degree, Cint(method), false)
@@ -72,7 +72,7 @@ function compare(::Type{T}, batch, len, dim, degree, method::LogSigMethod.T; sam
             SigLib._prepare_log_sig_for(packed, dim, degree, LogSigMethod.DirectBCH)
             SigLib._log_sig_from_path_c!(out, packed, batch, len, dim, degree, 1)
         else
-            SigLib._signature_c!(sig_buffer, packed, batch, dim, len, degree, false, false, true, false, 1, one(T))
+            SigLib._signature_c!(sig_buffer, packed, batch, dim, len, degree, false, false, SigMethod.Auto, 0, false, 1, one(T))
             SigLib._prepare_log_sig_if_needed(packed, dim, degree, method)
             SigLib._sig_to_log_sig_c!(out, sig_buffer, batch, dim, degree, false, false, method, false, 1)
         end

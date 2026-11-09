@@ -15,11 +15,12 @@ bl = similar(bs)
 branched_log_sig!(bl, path, 2, bs) # bs is reusable scratch storage
 sig(path, 3; correction=[-0.01, 0.0, 0.0, -0.01]) # local level-2 correction
 lyndon_brackets(2, 3) # standard brackets in LyndonBasis/DirectBCH coordinate order
-trees(2, 3) # BCK trees; planar=true gives MKW ordered forests
+trees(2, 3) # BCK trees; forests(2, 3) gives MKW ordered forests
+lyndon_forest_to_idx((((0,), 0),), 2, 3) # compressed MKW log index
 branched_log_sig_basis(2, 3; planar=true, method=BranchedLogSigMethod.MkwBasis) # compressed MKW brackets
 ```
 
-Methods use scoped enum values: `LogSigMethod.Expanded`, `.LyndonWords` (default), `.LyndonBasis`, or `.DirectBCH`. Branched logs use `BranchedLogSigMethod.Expanded`, `.MkwWords`, `.MkwBasis`, or `.DirectBCH`; the default is `Expanded` for nonplanar paths and `MkwWords` for planar paths.
+Methods use scoped enum values. Signatures use `SigMethod.Auto` (default), `.Horner`, or `.PrefixSuffix`. Log signatures use `LogSigMethod.Expanded`, `.LyndonWords` (default), `.LyndonBasis`, or `.DirectBCH`. Branched logs use `BranchedLogSigMethod.Expanded`, `.MkwWords`, `.MkwBasis`, or `.DirectBCH`; the default is `Expanded` for nonplanar paths and `MkwWords` for planar paths.
 
 ## Documentation
 

@@ -35,11 +35,11 @@ end
         for width in (4, 12, 28)
             rows = reshape(T.(sin.(1:3width) ./ 20), width, 3)
             expected = _corrected_signature_reference(path, 4, rows)
-            for horner in (false, true)
-                actual = sig(path, 4; correction=rows, horner=horner)
+            for method in instances(SigMethod.T)
+                actual = sig(path, 4; correction=rows, method)
                 @test eltype(actual) === T
                 @test actual ≈ expected
-                @test sig(path, 4; correction=rows, horner=horner, scalar_term=true) ≈ [one(T); expected]
+                @test sig(path, 4; correction=rows, method, scalar_term=true) ≈ [one(T); expected]
             end
             constant = rows[:, 1]
             @test sig(path, 4; correction=constant) ≈

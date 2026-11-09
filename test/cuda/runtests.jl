@@ -35,7 +35,7 @@ end
             options = (; time_aug, lead_lag, end_time=0.7)
             for scalar_term in (false, true)
                 parity(sig, path, 3; options..., scalar_term)
-                parity(sig, path, 3; options..., scalar_term, horner=false)
+                parity(sig, path, 3; options..., scalar_term, method=SigMethod.PrefixSuffix)
                 for method in (LogSigMethod.Expanded, LogSigMethod.LyndonWords, LogSigMethod.LyndonBasis)
                     s = sig(path, 3; options..., scalar_term)
                     l = log_sig(path, 3; options..., scalar_term, method)
@@ -72,7 +72,7 @@ end
         for correction in (constant, shared, specific)
             options = (; correction, time_aug, scalar_term, end_time=0.7)
             parity(sig, path, 3; options...)
-            parity(sig, path, 3; options..., horner=false)
+            parity(sig, path, 3; options..., method=SigMethod.PrefixSuffix)
             for method in (LogSigMethod.Expanded, LogSigMethod.LyndonWords, LogSigMethod.LyndonBasis)
                 parity(log_sig, path, 3; options..., method)
             end

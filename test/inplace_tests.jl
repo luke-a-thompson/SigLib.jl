@@ -16,7 +16,7 @@ end
         degree in (0, 3), scalar_term in (false, true), time_aug in (false, true), lead_lag in (false, true)
         path = reshape(T.(sin.(1:prod(shape)) ./ 4), shape)
         options = (; time_aug, lead_lag, scalar_term, end_time=0.7)
-        check_inplace(sig, sig!, path, degree; options..., horner=false)
+        check_inplace(sig, sig!, path, degree; options..., method=SigMethod.PrefixSuffix)
         for planar in (false, true)
             check_inplace(branched_sig, branched_sig!, path, degree; options..., planar)
         end

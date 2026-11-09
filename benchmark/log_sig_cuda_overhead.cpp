@@ -14,7 +14,7 @@ double repeat(void* direct_ptr, void* signature_ptr, void* convert_ptr, void* pr
               int method, bool matched_checks, uint64_t iterations) {
     using Direct = int (*)(const T*, T*, uint64_t, uint64_t, uint64_t, uint64_t);
     using Signature = int (*)(const T*, T*, uint64_t, uint64_t, uint64_t, uint64_t,
-                             bool, bool, T, bool, bool, const T*, uint64_t, uint64_t, uint64_t);
+                             bool, bool, T, bool, const T*, uint64_t, uint64_t, uint64_t, int, uint64_t);
     using Convert = int (*)(const T*, T*, uint64_t, uint64_t, uint64_t, int, bool);
     using Prepare = int (*)(uint64_t, uint64_t, int, bool);
     auto direct = reinterpret_cast<Direct>(direct_ptr);
@@ -30,7 +30,7 @@ double repeat(void* direct_ptr, void* signature_ptr, void* convert_ptr, void* pr
     for (uint64_t i = 0; i < iterations; ++i) {
         if (method != 3) {
             if (matched_checks && (rc = synchronize())) return -(100000 + rc);
-            rc = signature(path, sig, batch, dim, length, degree, false, false, T(1), true, false, nullptr, 0, 0, 0);
+            rc = signature(path, sig, batch, dim, length, degree, false, false, T(1), false, nullptr, 0, 0, 0, 2, 0);
             if (rc) return -rc;
             if (matched_checks && (rc = synchronize())) return -(100000 + rc);
         }
